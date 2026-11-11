@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Đặc Tả Kỹ Thuật & Hướng Dẫn Sản Phẩm - Lab Air Monitor</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'default',
+    flowchart: { curve: 'linear', htmlLabels: true, useMaxWidth: true },
+    themeVariables: {
+      primaryColor: '#e0f2fe',
+      primaryBorderColor: '#0284c7',
+      primaryTextColor: '#0f172a',
+      lineColor: '#0369a1',
+      secondaryColor: '#f1f5f9',
+      tertiaryColor: '#f8fafc',
+      fontFamily: 'Segoe UI, Arial, sans-serif'
+    }
+  });
+</script>
+<style>
+  @page {
+    size: A4 portrait;
+    margin: 15mm 15mm 15mm 15mm;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.55;
+    color: #1e293b;
+    margin: 0;
+    padding: 0 5px;
+    background: #fff;
+  }
+  .doc-header {
+    border-bottom: 3px solid #0284c7;
+    padding-bottom: 12px;
+    margin-bottom: 20px;
+  }
+  .doc-title {
+    font-size: 18pt;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0 0 6px 0;
+    letter-spacing: -0.5px;
+  }
+  .doc-subtitle {
+    font-size: 12pt;
+    font-weight: 600;
+    color: #0284c7;
+    margin: 0 0 8px 0;
+  }
+  .doc-meta {
+    font-size: 9pt;
+    color: #64748b;
+  }
+  h2 {
+    font-size: 13pt;
+    font-weight: 700;
+    color: #0369a1;
+    border-bottom: 1.5px solid #cbd5e1;
+    padding-bottom: 4px;
+    margin-top: 24px;
+    margin-bottom: 10px;
+    page-break-after: avoid;
+  }
+  h3 {
+    font-size: 11pt;
+    font-weight: 700;
+    color: #1e293b;
+    margin-top: 14px;
+    margin-bottom: 6px;
+    page-break-after: avoid;
+  }
+  p, ul, ol {
+    margin-top: 0;
+    margin-bottom: 8px;
+  }
+  li { margin-bottom: 4px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 16px 0;
+    page-break-inside: avoid;
+    font-size: 9pt;
+  }
+  th, td {
+    border: 1px solid #cbd5e1;
+    padding: 6px 8px;
+    text-align: left;
+    vertical-align: middle;
+  }
+  th {
+    background-color: #f1f5f9;
+    font-weight: 700;
+    color: #0f172a;
+  }
+  tr:nth-child(even) { background-color: #f8fafc; }
+  pre {
+    background-color: #0f172a;
+    color: #f8fafc;
+    padding: 10px 12px;
+    border-radius: 4px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 8.5pt;
+    line-height: 1.4;
+    overflow-x: auto;
+    page-break-inside: avoid;
+    margin: 10px 0;
+  }
+  .mermaid {
+    text-align: center;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 12px;
+    margin: 14px 0;
+    page-break-inside: avoid;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 8pt;
+    font-weight: 600;
+  }
+  .badge-success { background: #dcfce7; color: #15803d; }
+  .badge-warning { background: #fef3c7; color: #b45309; }
+  .badge-danger { background: #fee2e2; color: #b91c1c; }
+  .badge-info { background: #e0f2fe; color: #0369a1; }
+  .page-break { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<div class="doc-header">
+  <div class="doc-title">TÀI LIỆU ĐẶC TẢ KỸ THUẬT & HƯỚNG DẪN SẢN PHẨM</div>
+  <div class="doc-subtitle">HỆ THỐNG GIÁM SÁT KHÔNG KHÍ & VI KHÍ HẬU PHÒNG THÍ NGHIỆM (LAB AIR MONITOR)</div>
+  <div class="doc-meta">Phần cứng: ESP32-D0WD-V3 Dual-Core | Cảm biến: MQ-135, DHT22 | Hiển thị: OLED SSD1306 | Cloud: Supabase Database</div>
+</div>
+
+<h2>1. TỔNG QUAN HỆ THỐNG</h2>
+<p>Hệ thống <strong>Lab Air Monitor</strong> là giải pháp IoT chuyên dụng cho các phòng thí nghiệm điện tử, vi mạch, hóa sinh và phòng học thông minh. Thiết bị vận hành trên nền tảng vi điều khiển <strong>ESP32 Dual-Core (FreeRTOS)</strong>, kết hợp xử lý thời gian thực ngoại tuyến (Edge Computing) và đồng bộ điện toán đám mây (Cloud Telemetry).</p>
+
+<h3>Các đặc tính cốt lõi</h3>
+<ul>
+  <li><strong>Kiến trúc đa luồng FreeRTOS (Dual-Core):</strong> Phân chia độc lập giữa tầng đo đạc cảm biến/bảo vệ phần cứng (Core 1) và tầng truyền thông mạng/Web/Cloud (Core 0).</li>
+  <li><strong>Lưu trữ ngoại tuyến kép (SQLite / LittleFS Local Cache):</strong> Khi mất mạng hoặc phát Mode ARP, dữ liệu được ghi tuần tự vào Flash (tệp <code>sql_cache.jsonl</code>). Khi có kết nối lại, hệ thống tự động đẩy dữ liệu lên Supabase theo từng lô (Batch Sync 50 bản ghi) và xóa bộ đệm.</li>
+  <li><strong>Mạng kép linh hoạt (Dual Network Engine):</strong> Chuyển đổi linh hoạt giữa chế độ trạm (Wi-Fi STA) và điểm truy cập nội bộ (Mode ARP SoftAP - IP <code>192.168.4.1</code>) tích hợp Captive Portal cho phép quét và nhập Wi-Fi trực quan.</li>
+  <li><strong>Đánh giá vi khí hậu phòng Lab chuyên biệt:</strong> Tự động phát hiện nguy cơ phóng tĩnh điện (ESD) khi độ ẩm &lt; 40% RH, nguy cơ đọng sương, nấm mốc linh kiện/hóa chất khi độ ẩm &gt; 70% RH, và cảnh báo nhiệt độ.</li>
+  <li><strong>Màn hình OLED 6 tầng tối ưu:</strong> Tối ưu hóa 128x64 pixel, loại bỏ chỉ số phụ Pk/Th, hỗ trợ trọn vẹn dải đo Gas 0 - 4095 ADC không tràn viền, phân tầng giữa chất lượng khí (<code>KK:</code>) và vi khí hậu nhiệt ẩm (<code>MT:</code>).</li>
+</ul>
+
+<div class="page-break"></div>
+
+<h2>2. SƠ ĐỒ KIẾN TRÚC TỔNG THỂ (SYSTEM ARCHITECTURE)</h2>
+<p>Sơ đồ được thiết kế theo luồng phân tầng 1 chiều rõ ràng, ngăn chặn hoàn toàn hiện tượng lệch khối hoặc đè chéo:</p>
+
+<pre class="mermaid">
+flowchart TD
+    subgraph IN["1. NGOẠI VI ĐẦU VÀO & CẢM BIẾN"]
+        direction LR
+        MQ135["MQ-135 (GPIO 34)<br/>Nồng độ Gas / Khói ADC"]
+        DHT22["DHT22 (GPIO 15)<br/>Nhiệt độ & Độ ẩm"]
+        BOOT["Nút BOOT (GPIO 0)<br/>Giữ 3s Reset WiFi"]
+    end
+
+    subgraph CORE1["2. ESP32 CORE 1: XỬ LÝ THỜI GIAN THỰC (500ms Loop)"]
+        direction TB
+        READ["Đọc ADC & DHT22<br/>(Lọc trung bình 10 mẫu)"]
+        DEBOUNCE["Bộ Lọc Debounce 30s<br/>(Báo động khẩn cấp 2s)"]
+        CLIMATE["Thuật Toán Đánh Giá Vi Khí Hậu<br/>(Chất lượng KK & Nhiệt/Ẩm Lab)"]
+        READ --> DEBOUNCE --> CLIMATE
+    end
+
+    subgraph MEMORY["3. BỘ NHỚ DÙNG CHUNG & LƯU TRỮ FLASH NỘI BỘ"]
+        direction LR
+        SHARED["Biến Liên Lõi (Volatile Safe)<br/>Gas, Temp, Humi, AQI, Mode"]
+        LITTLEFS["LittleFS (sql_cache.jsonl)<br/>Bộ đệm Offline SQLite"]
+        NVS["NVS Flash (Preferences)<br/>SSID, Pass, Ngưỡng Gas"]
+    end
+
+    subgraph CORE0["4. ESP32 CORE 0: DỊCH VỤ MẠNG & ĐỒNG BỘ CLOUD"]
+        direction TB
+        WIFI_MGR["Quản Lý Mạng Kép<br/>(STA Client / Mode ARP SoftAP)"]
+        WEBSERVER["Async Web Server & REST API<br/>(/api/data, /api/cmd, ...)"]
+        SYNC_ENGINE["Đồng Bộ Cloud Supabase<br/>(Batch Sync 50 bản ghi/lần)"]
+        WIFI_MGR --> WEBSERVER
+        WIFI_MGR --> SYNC_ENGINE
+    end
+
+    subgraph OUT["5. THIẾT BỊ ĐẦU RA & NỀN TẢNG QUẢN LÝ"]
+        direction LR
+        OLED["Màn hình OLED 0.96 inch<br/>(SSD1306 I2C 128x64)"]
+        ACTUATORS["Còi Chíp (GPIO 23)<br/>3 Đèn LED (Xanh/Vàng/Đỏ)"]
+        DASHBOARD["Web Dashboard Trực Quan<br/>(Dark Theme Responsive)"]
+        SUPABASE["Supabase Cloud Database<br/>(PostgreSQL Telemetry)"]
+    end
+
+    IN --> READ
+    BOOT -.->|Nhấn giữ 3s| NVS
+    CLIMATE --> SHARED
+
+    CLIMATE --> OLED
+    CLIMATE --> ACTUATORS
+
+    SHARED --> WEBSERVER
+    SHARED --> SYNC_ENGINE
+    NVS <--> WIFI_MGR
+
+    SYNC_ENGINE -->|Khi mất mạng| LITTLEFS
+    LITTLEFS -->|Khi có mạng lại| SYNC_ENGINE
+
+    WEBSERVER <--> DASHBOARD
+    SYNC_ENGINE --> SUPABASE
+</pre>
+
+<div class="page-break"></div>
+
+<h2>3. SƠ ĐỒ CHUYỂN ĐỔI TRẠNG THÁI MẠNG (NETWORK STATE MACHINE)</h2>
+<pre class="mermaid">
+stateDiagram-v2
+    [*] --> KhoiTao : Khởi động nguồn ESP32
+    KhoiTao --> DocNVS : Đọc thông tin Wi-Fi đã lưu từ NVS
+
+    state DocNVS {
+        [*] --> KiemTraThongTin
+        KiemTraThongTin --> CoThongTin : Đã có SSID & Mật khẩu
+        KiemTraThongTin --> KhongCoThongTin : Chưa có thông tin
+    }
+
+    KhongCoThongTin --> CheDoSoftAP : Bật chế độ Mode ARP (SoftAP)
+    CoThongTin --> CheDoKetNoiSTA : Thử kết nối Wi-Fi phòng Lab
+
+    state CheDoKetNoiSTA {
+        [*] --> ThuKetNoiTrong15s
+        ThuKetNoiTrong15s --> KetNoiThanhCong : Nhận IP Router (192.168.x.x)
+        ThuKetNoiTrong15s --> KetNoiThatBai : Quá thời gian 15 giây
+    }
+
+    KetNoiThatBai --> CheDoSoftAP : Chuyển sang phát Wi-Fi nội bộ
+    KetNoiThanhCong --> HoatDongTrucTuyen : Sẵn sàng hoạt động Online
+
+    state HoatDongTrucTuyen {
+        [*] --> DayDataCloud
+        DayDataCloud --> KiemTraCacheOffline : Mỗi 8 giây
+        KiemTraCacheOffline --> DongBoBatch : Có bản ghi trong Flash
+        DongBoBatch --> XoaCacheSauKhiGui : Supabase trả lời HTTP 201
+    }
+
+    state CheDoSoftAP {
+        [*] --> PhatWifiNoiBo : SSID AirMonitor_Duy | IP 192.168.4.1
+        PhatWifiNoiBo --> LuuCacheFlash : Thu thập cảm biến & lưu SQLite cache
+        PhatWifiNoiBo --> NhanThongTinMoi : Người dùng quét & lưu Wi-Fi từ Web
+    }
+
+    NhanThongTinMoi --> KhoiDongLai : Khởi động lại vi điều khiển
+    KhoiDongLai --> KhoiTao
+    HoatDongTrucTuyen --> CheDoSoftAP : Mất sóng Wi-Fi liên tục
+</pre>
+
+<h2>4. QUY TRÌNH LƯU TRỮ & ĐỒNG BỘ NGOẠI TUYẾN (OFFLINE CACHE & SYNC)</h2>
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant Sensor as Cảm biến & Cốt lõi ESP32
+    participant Flash as LittleFS Flash (sql_cache.jsonl)
+    participant WiFi as Trình quản lý Wi-Fi
+    participant Cloud as Supabase Cloud Database
+
+    Note over Sensor,Flash: TRƯỜNG HỢP 1: MẤT MẠNG HOẶC Ở CHẾ ĐỘ MODE ARP
+    loop Mỗi 8 giây thu thập dữ liệu
+        Sensor->>WiFi: Kiểm tra trạng thái mạng (WiFi.status() == WL_CONNECTED)
+        WiFi-->>Sensor: Chưa kết nối hoặc đang ở Mode ARP
+        Sensor->>Flash: Ghi bản ghi JSON vào cuối tệp sql_cache.jsonl
+        Sensor->>Sensor: Tăng biến đếm sql_cache_count
+    end
+
+    Note over Sensor,Cloud: TRƯỜNG HỢP 2: KHI KẾT NỐI MẠNG ĐƯỢC THIẾT LẬP
+    WiFi-->>Sensor: Đã kết nối mạng thành công (IP 192.168.1.x)
+    Sensor->>Flash: Kiểm tra sự tồn tại của sql_cache.jsonl
+    Flash-->>Sensor: Phát hiện bản ghi ngoại tuyến tồn đọng
+    Sensor->>Sensor: Gom nhóm 50 bản ghi đầu tiên thành 1 JSON Array
+    Sensor->>Cloud: Gửi HTTP POST /rest/v1/air_telemetry (Batch Request)
+    
+    alt Gửi thành công (HTTP 201 Created)
+        Cloud-->>Sensor: HTTP 201 Created
+        Sensor->>Flash: Xóa các bản ghi đã gửi khỏi tệp đệm
+        Sensor->>Sensor: Cập nhật biến đếm sql_cache_count về 0
+    else Lỗi kết nối hoặc máy chủ bận
+        Cloud-->>Sensor: HTTP Timeout / Lỗi mạng
+        Sensor->>Flash: Giữ nguyên dữ liệu trong Flash để gửi lại vào chu kỳ kế tiếp
+    end
+</pre>
+
+<div class="page-break"></div>
+
+<h2>5. SƠ ĐỒ PHÂN BỔ CHÂN PHẦN CỨNG (PINOUT & WIRING)</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Linh kiện</th>
+      <th>Chân ESP32</th>
+      <th>Loại tín hiệu</th>
+      <th>Điện áp</th>
+      <th>Mô tả chức năng</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>MQ-135 Gas Sensor</strong></td>
+      <td><code>GPIO 34</code></td>
+      <td>Analog In (ADC1_CH6)</td>
+      <td>3.3V</td>
+      <td>Đo nồng độ khói, khí gas, dung môi hóa chất phòng lab (dải 0 - 4095 ADC)</td>
+    </tr>
+    <tr>
+      <td><strong>DHT22 Sensor</strong></td>
+      <td><code>GPIO 15</code></td>
+      <td>Digital In/Out (1-Wire)</td>
+      <td>3.3V</td>
+      <td>Đo nhiệt độ (-40 đến 80°C) và độ ẩm (0 - 100% RH)</td>
+    </tr>
+    <tr>
+      <td><strong>OLED SSD1306 (SDA)</strong></td>
+      <td><code>GPIO 21</code></td>
+      <td>I2C Data</td>
+      <td>3.3V</td>
+      <td>Đường truyền dữ liệu hiển thị màn hình OLED</td>
+    </tr>
+    <tr>
+      <td><strong>OLED SSD1306 (SCL)</strong></td>
+      <td><code>GPIO 22</code></td>
+      <td>I2C Clock</td>
+      <td>3.3V</td>
+      <td>Đường xung nhịp đồng bộ I2C (400kHz Fast Mode)</td>
+    </tr>
+    <tr>
+      <td><strong>Active Buzzer</strong></td>
+      <td><code>GPIO 23</code></td>
+      <td>Digital Out / PWM</td>
+      <td>3.3V</td>
+      <td>Còi hú báo động khẩn cấp và phát giai điệu cảnh báo đa âm</td>
+    </tr>
+    <tr>
+      <td><strong>LED Xanh (Green)</strong></td>
+      <td><code>GPIO 18</code></td>
+      <td>Digital Out</td>
+      <td>3.3V</td>
+      <td>Báo trạng thái an toàn: Không khí sạch & vi khí hậu đạt chuẩn</td>
+    </tr>
+    <tr>
+      <td><strong>LED Vàng (Yellow)</strong></td>
+      <td><code>GPIO 19</code></td>
+      <td>Digital Out</td>
+      <td>3.3V</td>
+      <td>Báo trạng thái chú ý: Có nồng độ khí tăng nhẹ hoặc cảnh báo nhiệt ẩm</td>
+    </tr>
+    <tr>
+      <td><strong>LED Đỏ (Red)</strong></td>
+      <td><code>GPIO 5</code></td>
+      <td>Digital Out</td>
+      <td>3.3V</td>
+      <td>Báo động đỏ: Nồng độ khói gas vượt ngưỡng nguy hiểm</td>
+    </tr>
+    <tr>
+      <td><strong>Nút BOOT (Vật lý)</strong></td>
+      <td><code>GPIO 0</code></td>
+      <td>Digital In (Pull-up)</td>
+      <td>3.3V</td>
+      <td>Nhấn giữ 3 giây để xóa cấu hình Wi-Fi và đưa về Mode ARP mặc định</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>6. THIẾT KẾ HIỂN THỊ MÀN HÌNH OLED 6 TẦNG (128x64)</h2>
+<pre>
++-------------------------------------------------------+ y = 0
+| LAB AIR                                    Mode AUTO  | y = 9  (Font: 6x10_tf)
+|-------------------------------------------------------| y = 11 (Kẻ ngang phân cách)
+| GAS: 153 ADC                                          | y = 21 (Font: helvB08_tr - Chữ to)
+| 28.5 C    65% RH                                      | y = 32 (Font: helvB08_tr - Chữ to)
+| KK: AN TOAN (SACH)                                    | y = 43 (Font: 6x10_tf - Đánh giá khí)
+| MT: ON DINH (CHUAN)                                   | y = 53 (Font: 6x10_tf - Đánh giá nhiệt ẩm)
+|-------------------------------------------------------| y = 55 (Kẻ ngang phân cách)
+| IP:192.168.1.8 | Coi:OFF                              | y = 63 (Font: 5x7_tf  - Chữ nhỏ đáy)
++-------------------------------------------------------+ y = 64
+</pre>
+
+<h3>Đặc tả chi tiết các tầng hiển thị:</h3>
+<ol>
+  <li><strong>Top Bar (y=9):</strong> Hiển thị nhãn <code>LAB AIR</code> góc trái. Góc phải hiển thị động: <code>Mode AUTO</code>, <code>Mode ON</code>, <code>Mode OFF</code>, <code>Mode ARP</code> hoặc <code>[MUT:25s]</code> khi đang tạm tắt còi.</li>
+  <li><strong>Dòng Gas (y=21):</strong> Định dạng <code>GAS: %d ADC</code>. Đã loại bỏ hoàn toàn Pk và Th, giải phóng trọn vẹn 128 pixel chiều ngang, giúp số 4 chữ số (lên tới 4095 ADC) hiển thị thoáng và không bị tràn.</li>
+  <li><strong>Dòng Nhiệt độ & Độ ẩm (y=32):</strong> Định dạng <code>%.1f° C    %.0f%% RH</code> với font Helvetica Bold rõ ràng.</li>
+  <li><strong>Dòng Đánh giá Chất lượng Không khí (y=43):</strong>
+    <ul>
+      <li><span class="badge badge-success">Mức 0</span> <code>KK: AN TOAN (SACH)</code> - Khí sạch, không phát hiện mùi lạ/hóa chất.</li>
+      <li><span class="badge badge-warning">Mức 1</span> <code>KK: O NHIEM (CHU Y)</code> - Nồng độ khí gas/khói tăng nhẹ, cần theo dõi.</li>
+      <li><span class="badge badge-danger">Mức 2</span> <code>KK: NGUY HIEM KHOI!</code> - Báo động khẩn cấp, kích hoạt còi hú.</li>
+    </ul>
+  </li>
+  <li><strong>Dòng Đánh giá Vi Khí Hậu Phòng Lab (y=53):</strong>
+    <ul>
+      <li><code>MT: NONG & AM</code>: Nhiệt độ &gt; 28°C kết hợp độ ẩm &gt; 70% RH (nguy cơ bí khí).</li>
+      <li><code>MT: KHO (NGUY CO ESD)</code>: Độ ẩm &lt; 40% RH (nguy cơ phóng tĩnh điện làm chết vi mạch).</li>
+      <li><code>MT: AM (NGUY CO MOC)</code>: Độ ẩm &gt; 70% RH (nguy cơ ẩm mốc bảng mạch và hư hại hóa chất).</li>
+      <li><code>MT: ON DINH (CHUAN)</code>: Môi trường làm việc đạt tiêu chuẩn lý tưởng.</li>
+    </ul>
+  </li>
+  <li><strong>Bottom Bar (y=63):</strong> Hiển thị địa chỉ IP kết nối của ESP32 và trạng thái còi báo động.</li>
+</ol>
+
+<div class="page-break"></div>
+
+<h2>7. DANH MỤC API RESTFUL CỦA THIẾT BỊ</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Phương thức</th>
+      <th>Endpoint</th>
+      <th>Tham số</th>
+      <th>Mô tả chức năng</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="badge badge-info">GET</span></td>
+      <td><code>/api/data</code></td>
+      <td>Không</td>
+      <td>Trả về JSON toàn bộ cảm biến tức thời, còi, IP, chế độ và số bản ghi SQLite cache.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-warning">POST</span></td>
+      <td><code>/api/cmd</code></td>
+      <td><code>mode=0/1/2</code> hoặc <code>action=snooze</code></td>
+      <td>Điều khiển chế độ còi: 0 (Auto), 1 (Bật), 2 (Tắt), hoặc tạm tắt còi 30 giây (Snooze).</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-warning">POST</span></td>
+      <td><code>/api/threshold</code></td>
+      <td><code>value=[ADC]</code></td>
+      <td>Cài đặt ngưỡng khói gas nguy hiểm lưu trực tiếp vào NVS Flash.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-info">GET</span></td>
+      <td><code>/api/wifi/scan</code></td>
+      <td>Không</td>
+      <td>Quét các mạng Wi-Fi xung quanh phòng Lab, trả về danh sách SSID, RSSI, bảo mật.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-warning">POST</span></td>
+      <td><code>/api/wifi/save</code></td>
+      <td><code>ssid=[Tên]</code>, <code>pass=[Pass]</code></td>
+      <td>Lưu cấu hình Wi-Fi mới vào NVS và tự động khởi động lại thiết bị để kết nối mạng.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-danger">POST</span></td>
+      <td><code>/api/wifi/reset</code></td>
+      <td>Không</td>
+      <td>Xóa thông tin Wi-Fi đã lưu, đưa thiết bị về chế độ phát điểm truy cập (Mode ARP).</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-info">GET</span></td>
+      <td><code>/api/sql-cache</code></td>
+      <td>Không</td>
+      <td>Đọc số lượng và chi tiết các bản ghi vi khí hậu đang đệm ngoại tuyến trong Flash.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-danger">POST</span></td>
+      <td><code>/api/sql-clear</code></td>
+      <td>Không</td>
+      <td>Xóa sạch toàn bộ dữ liệu đệm ngoại tuyến trong Flash.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>8. CƠ CHẾ AN TOÀN FAILSAFE & BẢO VỆ PHẦN CỨNG</h2>
+<ol>
+  <li><strong>Bộ lọc Debounce chống nhiễu 30 giây:</strong> Tránh tình trạng còi hú chập chờn khi khói dao động sát ngưỡng do luồng quạt gió. Khi nồng độ khói vọt lên mức Báo Động Đỏ, hệ thống chỉ chờ 2 giây để kích hoạt còi và đèn đỏ ngay lập tức nhằm kịp thời cứu hỏa.</li>
+  <li><strong>Nút BOOT vật lý (GPIO 0):</strong> Nhấn giữ nút BOOT 3 giây khi khởi động sẽ xóa sạch thông tin Wi-Fi trong NVS mà không cần kết nối máy tính nạp lại code, tự động phát lại điểm truy cập <code>AirMonitor_Duy</code>.</li>
+  <li><strong>Lưu trữ tuần tự JSON Lines (JSONL):</strong> Tối ưu hiệu năng ghi Flash, không gây phân mảnh bộ nhớ RAM vi điều khiển khi lưu trữ hàng ngàn bản ghi offline.</li>
+</ol>
+
+</body>
+</html>

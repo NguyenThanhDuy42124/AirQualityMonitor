@@ -1,0 +1,35 @@
+# File chua khoa bi mat & credentials ca nhan (KHONG COMMIT GITHUB)
+secrets.h
+**/secrets.h
+*.local.h
+**/*.local.h
+
+# File backup tạm
+*.bak
+**/*.bak
+
+# PlatformIO build artifacts & environments
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# IDE configurations
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS temporary files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# Compiler output files
+*.o
+*.elf
+*.bin
+*.hex
+*.tmp
+*.log

@@ -1,0 +1,2036 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Air Quality Monitor - Giám sát & Điều khiển Không khí Phòng học</title>
+  <meta name="description" content="Hệ thống IoT giám sát chất lượng không khí phòng học thời gian thực: nhiệt độ, độ ẩm, khói/gas. Hỗ trợ kết nối Cloud Supabase và Local Web Server.">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+
+  <style>
+/* ========================================================================
+   AIR QUALITY MONITOR – DASHBOARD STYLES (DUAL-MODE: CLOUD + LOCAL)
+   ======================================================================== */
+:root {
+  color-scheme: dark;
+  --bg: #060b14;
+  --bg-card: rgba(12, 19, 33, 0.85);
+  --bg-card-alt: rgba(16, 25, 42, 0.9);
+  --border: rgba(255,255,255,0.08);
+  --border-hover: rgba(255,255,255,0.18);
+
+  --text: #f0f4f8;
+  --text-2: #94a3b8;
+  --text-3: #64748b;
+
+  --cyan: #22d3ee;
+  --blue: #60a5fa;
+  --green: #34d399;
+  --amber: #fbbf24;
+  --orange: #f97316;
+  --red: #f87171;
+
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 8px 32px -8px rgba(0,0,0,0.55);
+  --ease: cubic-bezier(.4,0,.2,1);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+.bg-particle {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: .2;
+  pointer-events: none;
+  z-index: 0;
+}
+.bg-particle-1 { width: 500px; height: 500px; top: -120px; left: -80px; background: radial-gradient(circle, #0891b2, transparent 70%); }
+.bg-particle-2 { width: 400px; height: 400px; bottom: -100px; right: -60px; background: radial-gradient(circle, #7c3aed, transparent 70%); opacity: .12; }
+.bg-particle-3 { width: 300px; height: 300px; top: 40%; left: 50%; background: radial-gradient(circle, #059669, transparent 70%); opacity: .1; }
+
+.app-shell {
+  position: relative;
+  z-index: 1;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 20px 20px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 22px;
+  background: var(--bg-card);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.header-left { display: flex; align-items: center; gap: 14px; }
+.header-logo {
+  width: 44px; height: 44px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #0891b2, #2563eb);
+  display: grid; place-items: center;
+  font-size: 22px; color: #fff;
+  box-shadow: 0 4px 16px rgba(8,145,178,.45);
+}
+.header-title {
+  font-size: 1.35rem; font-weight: 800;
+  background: linear-gradient(90deg,#e2e8f0,#94a3b8);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.header-subtitle { font-size: .82rem; color: var(--text-2); }
+.header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.mode-toggle {
+  display: flex;
+  background: rgba(255,255,255,.05);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px;
+  gap: 3px;
+}
+.mode-toggle-btn {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font-size: .72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .2s;
+}
+.mode-toggle-btn.active {
+  background: var(--cyan);
+  color: #070d18;
+  box-shadow: 0 2px 8px rgba(34,211,238,.35);
+}
+
+.conn-badge {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 9px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 999px;
+  font-size: .70rem; font-weight: 500;
+  color: var(--text-2);
+}
+.conn-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--amber);
+  animation: blink 1.6s infinite;
+}
+.conn-dot.online { background: var(--green); box-shadow: 0 0 6px rgba(52,211,153,.5); animation: none; }
+.conn-dot.offline { background: var(--red); box-shadow: 0 0 6px rgba(248,113,113,.5); animation: none; }
+@keyframes blink { 0%,100%{opacity:1}50%{opacity:.35} }
+
+.icon-btn {
+  width: 32px; height: 32px;
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,.04);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: .88rem;
+  cursor: pointer;
+  transition: .2s var(--ease);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.icon-btn:hover { background: rgba(255,255,255,.1); }
+
+/* Alert Banner */
+.alert-strip {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 18px;
+  border-radius: var(--radius-sm);
+  animation: slideIn .3s var(--ease);
+  transition: all .3s ease;
+}
+.alert-strip.hidden { display: none !important; }
+.alert-strip.alert-danger {
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.25), rgba(185, 28, 28, 0.35));
+  border: 1.5px solid #ef4444;
+  box-shadow: 0 0 25px rgba(239, 68, 68, 0.45);
+  animation: dangerPulse 1.8s infinite ease-in-out;
+}
+.alert-strip.alert-warning {
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.2), rgba(217, 119, 6, 0.25));
+  border: 1px solid #f59e0b;
+}
+.alert-strip.alert-success {
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.25));
+  border: 1px solid #10b981;
+}
+@keyframes dangerPulse {
+  0%, 100% { box-shadow: 0 0 15px rgba(239, 68, 68, 0.35); }
+  50% { box-shadow: 0 0 35px rgba(239, 68, 68, 0.75); border-color: #f87171; }
+}
+.card.pulse-danger {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 30px rgba(239, 68, 68, 0.4) !important;
+  animation: dangerPulse 1.8s infinite ease-in-out;
+}
+.alert-body { display: flex; align-items: center; gap: 10px; }
+.alert-ic { font-size: 1.15rem; color: var(--red); }
+.alert-actions { display: flex; align-items: center; gap: 10px; }
+.alert-dismiss { background: none; border: none; color: var(--text-2); font-size: 1.4rem; cursor: pointer; }
+@keyframes slideIn { from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)} }
+
+/* Grid */
+.dash {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+.card-ctrl { grid-column: span 2; }
+.card-notif { grid-column: span 2; }
+.card-chart { grid-column: span 4; }
+.card-log { grid-column: span 4; }
+
+@media(max-width:1100px) {
+  .dash { grid-template-columns: repeat(2,1fr); }
+  .card-ctrl, .card-notif, .card-chart, .card-log { grid-column: span 2; }
+}
+@media(max-width:768px) {
+  .app-shell { padding: 12px 12px 30px; gap: 14px; }
+  .header { padding: 12px 16px; gap: 12px; }
+  .header-right { width: 100%; justify-content: space-between; flex-wrap: wrap; }
+  .mode-toggle { width: 100%; }
+  .mode-toggle-btn { flex: 1; text-align: center; justify-content: center; }
+  .chart-container { height: 250px; }
+}
+@media(max-width:540px) {
+  .dash { grid-template-columns: 1fr; }
+  .card-ctrl, .card-notif, .card-chart, .card-log { grid-column: span 1; }
+  .card { padding: 16px; border-radius: 14px; }
+  .header-logo { width: 38px; height: 38px; font-size: 18px; }
+  .header-title { font-size: 1.15rem; }
+  .header-subtitle { font-size: .75rem; }
+  .btn { min-height: 48px; font-size: .88rem; }
+  .btn-row { flex-direction: column; width: 100%; }
+  .btn-row .btn { width: 100%; }
+  .range-slider { height: 10px; }
+  .range-slider::-webkit-slider-thumb { width: 28px; height: 28px; }
+  .chart-container { height: 220px; }
+  .log-tbl th, .log-tbl td { padding: 8px 10px; font-size: .76rem; }
+}
+
+.conn-dot.pulse {
+  box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7);
+  animation: pulse-green 1.6s infinite;
+}
+@keyframes pulse-green {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(52, 211, 153, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+}
+
+.card {
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  transition: border-color .25s var(--ease);
+  overflow: hidden;
+}
+.card:hover { border-color: var(--border-hover); }
+
+.card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px;
+}
+.card-head-left { display: flex; align-items: center; gap: 10px; }
+.card-ic { font-size: 1.1rem; }
+.ic-temp { color: var(--cyan); }
+.ic-humi { color: var(--blue); }
+.ic-gas { color: var(--amber); }
+.ic-aqi { color: var(--green); }
+.ic-ctrl { color: var(--orange); }
+.ic-notif { color: var(--amber); }
+.ic-chart { color: var(--cyan); }
+.ic-log { color: var(--blue); }
+.card h2 { font-size: 1.05rem; font-weight: 700; }
+
+.tag {
+  font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  padding: 3px 9px; border-radius: 999px;
+}
+.tag-cyan   { background: rgba(34,211,238,.12); color: var(--cyan); border: 1px solid rgba(34,211,238,.3); }
+.tag-blue   { background: rgba(96,165,250,.12); color: var(--blue); border: 1px solid rgba(96,165,250,.3); }
+.tag-orange { background: rgba(249,115,22,.12); color: var(--orange); border: 1px solid rgba(249,115,22,.3); }
+.tag-mode   { background: rgba(34,211,238,.12); color: var(--cyan); border: 1px solid rgba(34,211,238,.3); }
+
+/* Gauge SVG */
+.gauge-wrap {
+  position: relative;
+  width: 140px; height: 140px;
+  margin: 8px auto 14px;
+}
+.gauge-svg {
+  width: 100%; height: 100%;
+  transform: rotate(-90deg);
+}
+.gauge-bg {
+  fill: none; stroke: rgba(255,255,255,.06);
+  stroke-width: 10;
+}
+.gauge-prog {
+  fill: none; stroke-width: 10;
+  stroke-linecap: round;
+  stroke-dasharray: 314;
+  stroke-dashoffset: 314;
+  transition: stroke-dashoffset .8s var(--ease), stroke .3s;
+}
+.gauge-prog-temp { stroke: var(--cyan); filter: drop-shadow(0 0 6px rgba(34,211,238,.4)); }
+.gauge-prog-humi { stroke: var(--blue); filter: drop-shadow(0 0 6px rgba(96,165,250,.4)); }
+.gauge-prog-gas  { stroke: var(--amber); filter: drop-shadow(0 0 6px rgba(251,191,36,.4)); }
+
+.gauge-val-box {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+}
+.gauge-val { font-size: 2.5rem; font-weight: 900; line-height: 1; letter-spacing: -0.5px; }
+.gauge-unit { font-size: .92rem; font-weight: 600; color: var(--text-2); margin-top: 5px; }
+
+.card-foot {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: .72rem; color: var(--text-3);
+  margin-top: auto; padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+/* AQI Box */
+.aqi-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 18px 12px;
+  background: rgba(255,255,255,.02);
+  border-radius: var(--radius-sm);
+  margin: 8px 0 12px;
+  transition: all .3s var(--ease);
+}
+.aqi-state.aqi-good {
+  background: rgba(52,211,153,.1);
+  border: 1px solid rgba(52,211,153,.3);
+  color: var(--green);
+}
+.aqi-state.aqi-moderate {
+  background: rgba(251,191,36,.1);
+  border: 1px solid rgba(251,191,36,.3);
+  color: var(--amber);
+}
+.aqi-state.aqi-danger {
+  background: rgba(248,113,113,.15);
+  border: 1.5px solid var(--red);
+  color: var(--red);
+}
+.aqi-icon { font-size: 2.6rem; margin-bottom: 6px; }
+.aqi-label { font-size: 1.65rem; font-weight: 900; letter-spacing: -0.5px; }
+.aqi-sub { font-size: .92rem; color: var(--text-2); margin-top: 4px; }
+
+/* Control Buttons */
+.ctrl-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  margin-bottom: 14px;
+}
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 11px 18px; border-radius: var(--radius-sm);
+  font-size: .88rem; font-weight: 600; cursor: pointer;
+  border: 1px solid transparent; transition: all .2s var(--ease);
+  text-decoration: none;
+}
+.btn-auto {
+  background: rgba(34,211,238,.12); color: var(--cyan);
+  border-color: rgba(34,211,238,.3);
+}
+.btn-auto.active {
+  background: var(--cyan); color: #070d18;
+  box-shadow: 0 0 16px rgba(34,211,238,.5);
+}
+.btn-manual {
+  background: rgba(249,115,22,.12); color: var(--orange);
+  border-color: rgba(249,115,22,.3);
+}
+.btn-manual.active {
+  background: var(--orange); color: #070d18;
+  box-shadow: 0 0 16px rgba(249,115,22,.5);
+}
+.btn-buzzer-on {
+  background: rgba(248,113,113,.15); color: var(--red);
+  border-color: rgba(248,113,113,.35);
+}
+.btn-buzzer-on:hover { background: var(--red); color: #fff; }
+.btn-buzzer-off {
+  background: rgba(52,211,153,.15); color: var(--green);
+  border-color: rgba(52,211,153,.35);
+}
+.btn-buzzer-off:hover { background: var(--green); color: #070d18; }
+.btn-primary { background: var(--cyan); color: #070d18; }
+.btn-ghost { background: rgba(255,255,255,.05); border: 1px solid var(--border); color: var(--text); }
+
+.cmd-status {
+  padding: 8px 12px; border-radius: var(--radius-sm);
+  font-size: .8rem; text-align: center;
+  background: rgba(255,255,255,.02);
+  border: 1px solid var(--border);
+  min-height: 38px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.cmd-status.ok { background: rgba(52,211,153,.1); border-color: rgba(52,211,153,.3); color: var(--green); }
+.cmd-status.err { background: rgba(248,113,113,.1); border-color: rgba(248,113,113,.3); color: var(--red); }
+.cmd-status.wait { background: rgba(251,191,36,.1); border-color: rgba(251,191,36,.3); color: var(--amber); }
+
+/* Switch & Slider */
+.toggle-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0; border-bottom: 1px solid var(--border);
+}
+.toggle-row:last-child { border-bottom: none; }
+.toggle-lbl { font-size: .88rem; font-weight: 500; }
+.toggle-desc { font-size: .75rem; color: var(--text-2); }
+.switch { position: relative; width: 44px; height: 24px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+  position: absolute; inset: 0; background: rgba(255,255,255,.1);
+  border-radius: 999px; transition: .25s; cursor: pointer;
+}
+.slider::before {
+  content: ""; position: absolute; height: 18px; width: 18px;
+  left: 3px; bottom: 3px; background: #fff;
+  border-radius: 50%; transition: .25s;
+}
+input:checked + .slider { background: var(--cyan); }
+input:checked + .slider::before { transform: translateX(20px); background: #070d18; }
+
+.range-wrap { margin-top: 10px; }
+.range-slider {
+  width: 100%; height: 6px; border-radius: 3px;
+  background: rgba(255,255,255,.1); outline: none;
+  accent-color: var(--amber); cursor: pointer;
+}
+
+/* Chart & Log */
+.chart-container { height: 320px; width: 100%; position: relative; }
+.log-box {
+  max-height: 240px; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.log-tbl { width: 100%; border-collapse: collapse; font-size: .84rem; text-align: left; }
+.log-tbl th {
+  padding: 10px 14px; background: rgba(0,0,0,.4); color: var(--text-2);
+  font-weight: 600; position: sticky; top: 0; backdrop-filter: blur(8px);
+}
+.log-tbl td { padding: 9px 14px; border-top: 1px solid var(--border); color: var(--text); }
+.log-tbl tbody tr:hover { background: rgba(255,255,255,.02); }
+
+/* Modal */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.75); backdrop-filter: blur(8px);
+  display: grid; place-items: center;
+  z-index: 1000; padding: 20px;
+}
+.modal-overlay.hidden { display: none; }
+.modal-box {
+  background: #101827; border: 1px solid var(--border);
+  border-radius: var(--radius); width: 100%; max-width: 520px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.8); overflow: hidden;
+}
+.modal-top {
+  padding: 16px 22px; display: flex; justify-content: space-between; align-items: center;
+  border-bottom: 1px solid var(--border);
+}
+.modal-top h3 { font-size: 1.1rem; display: flex; align-items: center; gap: 8px; }
+.modal-x { background: none; border: none; color: var(--text-2); font-size: 1.5rem; cursor: pointer; }
+.modal-mid { padding: 22px; display: flex; flex-direction: column; gap: 14px; }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label { font-size: .84rem; font-weight: 600; }
+.finput {
+  padding: 9px 12px; background: rgba(255,255,255,.05);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: #fff; font-size: .88rem; outline: none; transition: .2s;
+}
+.finput:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(34,211,238,.2); }
+select.finput {
+  color-scheme: dark;
+  background-color: #0b1120;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2322d3ee' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+  cursor: pointer;
+}
+select.finput option {
+  background-color: #0b1120;
+  color: #f1f5f9;
+  padding: 10px 12px;
+}
+select.finput option:hover,
+select.finput option:checked {
+  background-color: #0284c7;
+  color: #ffffff;
+}
+.modal-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0,0,0,.25);
+}
+.modal-tab-btn {
+  flex: 1; padding: 12px 14px;
+  background: none; border: none;
+  color: var(--text-2); font-size: .88rem; font-weight: 600;
+  cursor: pointer; border-bottom: 2px solid transparent;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: all .2s;
+}
+.modal-tab-btn.active {
+  color: var(--cyan);
+  border-bottom-color: var(--cyan);
+  background: rgba(34,211,238,.06);
+}
+.modal-tab-btn:hover { color: var(--text); }
+.modal-bot {
+  padding: 14px 22px; display: flex; justify-content: flex-end; gap: 10px;
+  border-top: 1px solid var(--border); background: rgba(0,0,0,.2);
+}
+  </style>
+</head>
+<body>
+  <div class="bg-particle bg-particle-1"></div>
+  <div class="bg-particle bg-particle-2"></div>
+  <div class="bg-particle bg-particle-3"></div>
+
+  <div class="app-shell">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <div class="header-logo">
+          <i class="fa-solid fa-wind"></i>
+        </div>
+        <div>
+          <h1 class="header-title">Air Quality Monitor</h1>
+          <p class="header-subtitle">Hệ thống Giám sát Không khí Phòng học</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <!-- Chuyển đổi Mode: Cloud vs Local Direct -->
+        <div class="mode-toggle">
+          <button class="mode-toggle-btn active" id="btnModeLocal" onclick="setConnectionMode('local')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg> Local Server (<span id="lblEspIP">192.168.4.1</span>)
+          </button>
+          <button class="mode-toggle-btn" id="btnModeCloud" onclick="setConnectionMode('cloud')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg> Supabase Cloud
+          </button>
+        </div>
+
+        <div class="conn-badge" id="badgeConn">
+          <span class="conn-dot" id="connDot"></span>
+          <span id="connLabel">Đang kết nối...</span>
+        </div>
+        <div class="conn-badge" id="badgeSqlCache" title="Bộ nhớ đệm SQLite / Local Flash khi mất mạng">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--cyan);vertical-align:middle"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+          <span>SQL Cache: <strong id="lblSqlCacheCount" style="color:var(--cyan)">0</strong></span>
+        </div>
+        <button class="icon-btn" id="openWifiBtn" title="Cài đặt WiFi cho ESP32" aria-label="Cài đặt WiFi">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+        </button>
+        <button class="icon-btn" id="btnRefresh" title="Làm mới" aria-label="Làm mới">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+        </button>
+        <button class="icon-btn" id="openSettingsBtn" title="Cấu hình kết nối" aria-label="Cài đặt">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Alert Banner -->
+    <div class="alert-strip hidden" id="alertStrip">
+      <div class="alert-body">
+        <i class="fa-solid fa-triangle-exclamation alert-ic" id="alertIcon"></i>
+        <div>
+          <strong id="alertHeading">Cảnh báo:</strong>
+          <span id="alertMsg">Nội dung cảnh báo...</span>
+        </div>
+      </div>
+      <div class="alert-actions">
+        <button class="btn btn-buzzer-off" id="alertQuickMuteBtn" style="display:none;padding:6px 12px;font-size:.8rem">
+          <i class="fa-solid fa-bell-slash"></i> Tạm Tắt Còi (30s)
+        </button>
+        <button class="alert-dismiss" id="dismissAlertBtn">&times;</button>
+      </div>
+    </div>
+
+    <!-- Dashboard Grid -->
+    <main class="dash">
+      <!-- 1. Nhiệt độ -->
+      <div class="card" id="cardTemp">
+        <div class="card-head">
+          <div class="card-head-left">
+            <i class="fa-solid fa-temperature-half card-ic ic-temp"></i>
+            <h2>Nhiệt độ</h2>
+          </div>
+          <span class="tag tag-cyan">DHT22</span>
+        </div>
+        <div class="gauge-wrap">
+          <svg class="gauge-svg" viewBox="0 0 120 120">
+            <circle class="gauge-bg" cx="60" cy="60" r="50"/>
+            <circle class="gauge-prog gauge-prog-temp" id="gaugeTemp" cx="60" cy="60" r="50"/>
+          </svg>
+          <div class="gauge-val-box">
+            <span class="gauge-val mono" id="tempValue">--</span>
+            <span class="gauge-unit">°C</span>
+          </div>
+        </div>
+        <div class="card-foot">
+          <span id="tempStatus">Đang đọc...</span>
+          <span class="mono" id="tempTime">--:--:--</span>
+        </div>
+      </div>
+
+      <!-- 2. Độ ẩm -->
+      <div class="card" id="cardHumi">
+        <div class="card-head">
+          <div class="card-head-left">
+            <i class="fa-solid fa-droplet card-ic ic-humi"></i>
+            <h2>Độ ẩm</h2>
+          </div>
+          <span class="tag tag-blue">DHT22</span>
+        </div>
+        <div class="gauge-wrap">
+          <svg class="gauge-svg" viewBox="0 0 120 120">
+            <circle class="gauge-bg" cx="60" cy="60" r="50"/>
+            <circle class="gauge-prog gauge-prog-humi" id="gaugeHumi" cx="60" cy="60" r="50"/>
+          </svg>
+          <div class="gauge-val-box">
+            <span class="gauge-val mono" id="humiValue">--</span>
+            <span class="gauge-unit">% RH</span>
+          </div>
+        </div>
+        <div class="card-foot">
+          <span id="humiStatus">Đang đọc...</span>
+          <span class="mono" id="humiTime">--:--:--</span>
+        </div>
+      </div>
+
+      <!-- 3. Khí Gas / Khói MQ-135 -->
+      <div class="card" id="cardGas">
+        <div class="card-head">
+          <div class="card-head-left">
+            <i class="fa-solid fa-smog card-ic ic-gas"></i>
+            <h2>Khí Gas / Khói</h2>
+          </div>
+          <span class="tag tag-orange">MQ-135</span>
+        </div>
+        <div class="gauge-wrap">
+          <svg class="gauge-svg" viewBox="0 0 120 120">
+            <circle class="gauge-bg" cx="60" cy="60" r="50"/>
+            <circle class="gauge-prog gauge-prog-gas" id="gaugeGas" cx="60" cy="60" r="50"/>
+          </svg>
+          <div class="gauge-val-box">
+            <span class="gauge-val mono" id="gasValue">--</span>
+            <span class="gauge-unit">ADC (0-4095)</span>
+          </div>
+        </div>
+
+        <!-- 2 thông số: Tức thời & Đỉnh khói (Peak 20s) -->
+        <div style="display:flex;gap:10px;margin:10px 0 6px">
+          <div style="flex:1;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 8px;text-align:center">
+            <div style="font-size:.65rem;color:var(--text-2);font-weight:700;text-transform:uppercase;letter-spacing:.5px">TỨC THỜI</div>
+            <div class="mono" style="font-size:1.45rem;font-weight:800;color:var(--amber);line-height:1.2"><span id="gasInstantTxt">--</span> <span style="font-size:.72rem;font-weight:500;color:var(--text-3)">ADC</span></div>
+          </div>
+          <div style="flex:1;background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.25);border-radius:var(--radius-sm);padding:6px 8px;text-align:center">
+            <div style="font-size:.65rem;color:var(--text-2);font-weight:700;text-transform:uppercase;letter-spacing:.5px">ĐỈNH 20S (PEAK)</div>
+            <div class="mono" style="font-size:1.45rem;font-weight:800;color:var(--orange);line-height:1.2"><span id="peakValue">--</span> <span style="font-size:.72rem;font-weight:500;color:var(--text-3)">ADC</span></div>
+          </div>
+        </div>
+
+        <div class="card-foot">
+          <span id="gasStatus">Đang đọc...</span>
+          <span class="mono" id="gasTime">--:--:--</span>
+        </div>
+      </div>
+
+      <!-- 4. Đánh giá Chất lượng Không khí -->
+      <div class="card" id="cardAqi">
+        <div class="card-head">
+          <div class="card-head-left">
+            <i class="fa-solid fa-shield-heart card-ic ic-aqi"></i>
+            <h2>Đánh giá An toàn</h2>
+          </div>
+        </div>
+        <div class="aqi-state aqi-good" id="aqiDisplay">
+          <i class="fa-solid fa-shield-heart aqi-icon" id="aqiIcon"></i>
+          <div class="aqi-label" id="aqiLabel">ĐANG TẢI...</div>
+          <div class="aqi-sub" id="aqiSub">Đang phân tích dữ liệu cảm biến</div>
+        </div>
+        <div class="card-foot">
+          <span>Còi báo: <strong id="buzzerStateText">TAT</strong></span>
+          <span>Chế độ: <strong id="modeStateText">AUTO</strong></span>
+        </div>
+      </div>
+
+      <!-- 5. Điều khiển Còi Báo Động (Phản hồi tức thì) -->
+      <div class="card card-ctrl">
+        <div class="card-head">
+          <div class="card-head-left">
+            <i class="fa-solid fa-bullhorn card-ic ic-ctrl"></i>
+            <h2>Điều khiển Còi Báo Động (Buzzer)</h2>
+          </div>
+          <span class="tag tag-mode" id="modeBadge">AUTO</span>
+        </div>
+        <div class="ctrl-grid">
+          <button class="btn btn-auto active" id="btnAuto"><i class="fa-solid fa-robot"></i> Chế độ Tự động (AUTO)</button>
+          <button class="btn btn-manual" id="btnManual"><i class="fa-solid fa-hand"></i> Chế độ Thủ công</button>
+          <button class="btn btn-buzzer-on" id="btnBuzzerOn"><i class="fa-solid fa-volume-high"></i> BẬT CÒI (Khẩn cấp)</button>
+          <button class="btn btn-buzzer-off" id="btnBuzzerOff"><i class="fa-solid fa-bell-slash"></i> TẠM TẮT CÒI (30S)</button>
+        </div>
+        <div class="cmd-status" id="cmdStatus">
+          <i class="fa-solid fa-circle-check" style="color:var(--green)"></i>
+          <span>Hệ thống sẵn sàng nhận lệnh điều khiển</span>
+        </div>
+      </div>
+
+      <!-- 6. Cài đặt Cảnh báo & Ngưỡng Khói -->
+      <div class="card card-notif">
+        <div class="card-head">
+          <div class="card-head-left">
+            <i class="fa-solid fa-bell card-ic ic-notif"></i>
+            <h2>Cài đặt Cảnh báo &amp; Ngưỡng</h2>
+          </div>
+          <span class="tag tag-orange">NGƯỠNG THỰC TẾ</span>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-lbl">Âm thanh Còi Hú Trình duyệt</div>
+            <div class="toggle-desc">Phát âm thanh còi báo động qua Web Audio API</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="toggleSound" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-lbl">Thông báo Desktop (Push)</div>
+            <div class="toggle-desc">Hiện thông báo khẩn cấp lên màn hình máy tính</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="togglePush">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="range-wrap">
+          <div style="display:flex;justify-content:space-between;font-size:.85rem;margin-bottom:6px">
+            <span>Ngưỡng khói nguy hiểm (Đỏ):</span>
+            <strong class="mono" style="color:var(--amber)"><span id="threshDisplay">500</span> ADC <span style="font-size:.78rem;color:var(--text-2)">(Mức TB: <span id="threshModDisplay">250</span> ADC)</span></strong>
+          </div>
+          <input type="range" class="range-slider" id="threshSlider" min="200" max="2000" step="25" value="500">
+        </div>
+      </div>
+
+      <!-- 7. Biểu đồ Thời gian Thực (Chart.js) -->
+      <div class="card card-chart">
+        <div class="card-head">
+          <div class="card-head-left">
+            <i class="fa-solid fa-chart-line card-ic ic-chart"></i>
+            <h2>Biểu đồ Theo dõi Xu hướng Không khí</h2>
+          </div>
+          <span class="tag tag-cyan">TIMELINE</span>
+        </div>
+        <div class="chart-container">
+          <canvas id="mainChart"></canvas>
+        </div>
+      </div>
+
+      <!-- 8. Nhật ký Sự kiện Hệ thống -->
+      <div class="card card-log">
+        <div class="card-head">
+          <div class="card-head-left">
+            <i class="fa-solid fa-list-check card-ic ic-log"></i>
+            <h2>Nhật ký Sự kiện &amp; Cảnh báo (Event Log)</h2>
+          </div>
+          <button class="btn btn-ghost" id="btnClearLog" style="padding:4px 10px;font-size:.78rem">
+            <i class="fa-solid fa-trash"></i> Xóa log
+          </button>
+        </div>
+        <div class="log-box">
+          <table class="log-tbl">
+            <thead>
+              <tr>
+                <th>Thời gian</th>
+                <th>Sự kiện</th>
+                <th>Nhiệt độ</th>
+                <th>Độ ẩm</th>
+                <th>Khói/Gas</th>
+                <th>Đánh giá</th>
+              </tr>
+            </thead>
+            <tbody id="logBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+    <footer style="text-align:center;font-size:.78rem;color:var(--text-3);padding:14px 0">
+      Hệ thống Giám sát Chất lượng Không khí Phòng học • ESP32
+    </footer>
+  </div>
+
+  <!-- Modal Cấu hình -->
+  <div class="modal-overlay hidden" id="settingsOverlay">
+    <div class="modal-box">
+      <div class="modal-top">
+        <h3 style="display:flex;align-items:center;gap:8px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+          Cài đặt Hệ thống &amp; Mạng
+        </h3>
+        <button class="modal-x" id="closeModalBtn">&times;</button>
+      </div>
+
+      <!-- Tabs chuyển đổi -->
+      <div class="modal-tabs">
+        <button type="button" class="modal-tab-btn active" id="tabWifiBtn" onclick="switchModalTab('wifi')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;vertical-align:middle"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+          Cài đặt WiFi ESP32
+        </button>
+        <button type="button" class="modal-tab-btn" id="tabCfgBtn" onclick="switchModalTab('cfg')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;vertical-align:middle"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          Cấu hình Dashboard
+        </button>
+      </div>
+
+      <!-- Tab 1: Cấu hình WiFi cho ESP32 -->
+      <div class="modal-mid" id="tabWifiContent">
+        <div style="background:rgba(34,211,238,.05);border:1px solid rgba(34,211,238,.15);padding:7px 10px;border-radius:var(--radius-sm);font-size:.72rem;line-height:1.35;color:var(--text-2)">
+          Khi mất kết nối hoặc đổi mạng, ESP32 tự phát WiFi <strong>AirMonitor_Duy</strong> (Pass: <code>admin1234</code> | IP: <strong>192.168.4.1</strong>).
+        </div>
+        <div class="field">
+          <label>Chọn mạng WiFi xung quanh:</label>
+          <div style="display:flex;gap:8px">
+            <select id="wifiSsidSelect" class="finput" style="flex:1">
+              <option value="">-- Bấm "Quét WiFi" để tìm mạng --</option>
+            </select>
+            <button type="button" class="btn btn-ghost" id="btnScanWifi" style="padding:0 12px;white-space:nowrap;display:inline-flex;align-items:center;gap:6px">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg> Quét
+            </button>
+          </div>
+        </div>
+        <div class="field" id="fieldManualSsid">
+          <label for="wifiSsidManual">Hoặc tự nhập tên WiFi (SSID):</label>
+          <input type="text" id="wifiSsidManual" class="finput" placeholder="Tên mạng WiFi">
+        </div>
+        <div class="field">
+          <label for="wifiPass">Mật khẩu WiFi:</label>
+          <div style="position:relative;display:flex;align-items:center">
+            <input type="password" id="wifiPass" class="finput" style="width:100%;padding-right:40px" placeholder="Nhập mật khẩu WiFi">
+            <button type="button" id="btnTogglePass" style="position:absolute;right:8px;background:none;border:none;color:var(--text-2);cursor:pointer;padding:6px" aria-label="Ẩn hiện mật khẩu">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
+          </div>
+        </div>
+        <button type="button" class="btn btn-primary" id="btnSaveWifi" style="width:100%;min-height:44px;margin-top:6px;display:inline-flex;align-items:center;justify-content:center;gap:8px">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Lưu &amp; Kết nối Mạng mới cho ESP32
+        </button>
+        <button type="button" class="btn btn-ghost" id="btnResetWifi" style="width:100%;min-height:38px;margin-top:6px;color:var(--red);border-color:rgba(248,113,113,.3);display:inline-flex;align-items:center;justify-content:center;gap:8px">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg> Xóa dữ liệu WiFi đã lưu (Về SoftAP)
+        </button>
+        <div id="wifiStatusMsg" style="font-size:.82rem;min-height:18px"></div>
+      </div>
+
+      <!-- Tab 2: Cấu hình Dashboard -->
+      <div class="modal-mid" id="tabCfgContent" style="display:none">
+        <div class="field">
+          <label>Chế độ kết nối mặc định:</label>
+          <select id="cfgConnMode" class="finput">
+            <option value="local">Local Direct Web Server (Mạng WiFi chung)</option>
+            <option value="cloud">Cloud IoT Supabase (Từ xa)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="cfgEspIP">Địa chỉ IP Local ESP32:</label>
+          <input type="text" id="cfgEspIP" class="finput" value="192.168.4.1">
+        </div>
+        <div class="field">
+          <label for="cfgSupabaseUrl">Supabase Project URL:</label>
+          <input type="text" id="cfgSupabaseUrl" class="finput" placeholder="https://YOUR_PROJECT_ID.supabase.co" value="">
+        </div>
+        <div class="field">
+          <label for="cfgSupabaseKey">Supabase Anon Key:</label>
+          <input type="text" id="cfgSupabaseKey" class="finput" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." value="">
+        </div>
+        <div class="field">
+          <label for="cfgInterval">Tần suất đồng bộ Cloud (giây):</label>
+          <input type="number" id="cfgInterval" class="finput" min="1" max="60" value="3">
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <span style="font-size:.82rem;font-weight:600">Bộ nhớ đệm SQLite Local:</span>
+            <span class="mono" id="lblSqlCacheModal" style="color:var(--cyan);font-weight:700;font-size:.82rem">0 bản ghi</span>
+          </div>
+          <div style="font-size:.70rem;color:var(--text-3);line-height:1.35;margin-bottom:8px">
+            Tự động lưu cảm biến vào SQLite/Flash khi mất mạng hoặc ở chế độ SoftAP. Khi có Internet sẽ tự động đẩy batch lên Supabase và xóa cache.
+          </div>
+          <div style="display:flex;gap:8px">
+            <button type="button" class="btn btn-ghost" onclick="downloadOfflineSqlFile()" style="flex:1;padding:6px 10px;font-size:.72rem">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Xuất file .SQL
+            </button>
+            <button type="button" class="btn btn-ghost" onclick="clearLocalSqlCache()" style="flex:1;padding:6px 10px;font-size:.72rem;color:var(--red);border-color:rgba(248,113,113,.25)">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg> Xóa cache SQLite
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-bot">
+        <button class="btn btn-ghost" id="cancelModalBtn">Đóng</button>
+        <button class="btn btn-primary" id="saveModalBtn" style="display:none"><i class="fa-solid fa-check"></i> Lưu &amp; Áp dụng</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+// ============================================================================
+// LOGIC CONTROLLER: DUAL-MODE (LOCAL 192.168.4.1 + SUPABASE CLOUD)
+// ============================================================================
+const DEFAULTS = {
+  connMode: 'local', // 'local' hoặc 'cloud'
+  espIP: (window.location.hostname && window.location.hostname !== 'localhost' && window.location.protocol.startsWith('http')) ? window.location.hostname : '192.168.4.1',
+  supabaseUrl: 'https://YOUR_PROJECT_ID.supabase.co',
+  supabaseKey: 'YOUR_SUPABASE_ANON_KEY',
+  syncInterval: 3,
+  gasThreshold: 500
+};
+
+const state = {
+  cfg: { ...DEFAULTS },
+  temp: 0, humi: 0, gas: 0,
+  aqiLevel: -1,
+  mode: 0,
+  buzzerOn: false,
+  prevAqi: -1,
+  soundOn: true,
+  pushOn: false,
+  chart: null,
+  timer: null,
+  sending: false,
+  retryCount: 0
+};
+
+// ======================== AUDIO SYNTHESIZER ========================
+let audioCtx = null;
+function getAudioContext() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function beep(freq = 880, dur = 0.25, type = 'triangle') {
+  if (!state.soundOn) return;
+  try {
+    const ctx = getAudioContext();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, ctx.currentTime);
+    g.gain.setValueAtTime(0.2, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(); o.stop(ctx.currentTime + dur);
+  } catch (_) {}
+}
+
+const BAC_PHAN_NOTES = [
+  // Câu 1: Ôi phút giây tương phùng anh nhớ và mong
+  { f: 392.00, d: 0.24 }, { f: 440.00, d: 0.24 }, { f: 392.00, d: 0.24 }, { f: 349.23, d: 0.24 }, { f: 293.66, d: 0.48 },
+  { f: 293.66, d: 0.24 }, { f: 440.00, d: 0.24 }, { f: 440.00, d: 0.14 }, { f: 523.25, d: 0.14 }, { f: 587.33, d: 0.24 }, { f: 698.46, d: 0.24 }, { f: 783.99, d: 0.80 },
+  { f: 0, d: 0.15 },
+
+  // Câu 2: Dòng lưu bút năm xưa in dấu mãi đậm sâu
+  { f: 392.00, d: 0.24 }, { f: 440.00, d: 0.24 }, { f: 523.25, d: 0.24 }, { f: 440.00, d: 0.24 }, { f: 440.00, d: 0.45 },
+  { f: 392.00, d: 0.22 }, { f: 440.00, d: 0.22 }, { f: 523.25, d: 0.40 }, { f: 587.33, d: 0.24 }, { f: 698.46, d: 0.80 },
+  { f: 0, d: 0.15 },
+
+  // Câu 3: Trong nỗi đau anh mệt nhoài
+  { f: 392.00, d: 0.24 }, { f: 440.00, d: 0.24 }, { f: 392.00, d: 0.24 }, { f: 349.23, d: 0.24 }, { f: 293.66, d: 0.45 }, { f: 293.66, d: 0.70 },
+  { f: 0, d: 0.15 },
+
+  // Câu 4: Trong phút giây anh tìm hoài
+  { f: 392.00, d: 0.24 }, { f: 440.00, d: 0.24 }, { f: 392.00, d: 0.24 }, { f: 349.23, d: 0.24 }, { f: 329.63, d: 0.45 }, { f: 329.63, d: 0.70 },
+  { f: 0, d: 0.15 },
+
+  // Câu 5: Muốn giữ em ở lại một lần này vì anh mãi thương
+  { f: 392.00, d: 0.22 }, { f: 440.00, d: 0.22 }, { f: 392.00, d: 0.22 }, { f: 349.23, d: 0.22 }, { f: 329.63, d: 0.35 }, { f: 329.63, d: 0.22 },
+  { f: 220.00, d: 0.38 }, { f: 261.63, d: 0.22 }, { f: 293.66, d: 0.22 }, { f: 349.23, d: 0.22 }, { f: 293.66, d: 0.24 }, { f: 293.66, d: 0.85 },
+  { f: 0, d: 0.25 },
+
+  // Câu 6: Xa cách nhau thật rồi sương trắng chiều thu
+  { f: 392.00, d: 0.24 }, { f: 440.00, d: 0.24 }, { f: 392.00, d: 0.24 }, { f: 349.23, d: 0.24 }, { f: 293.66, d: 0.48 },
+  { f: 293.66, d: 0.24 }, { f: 440.00, d: 0.24 }, { f: 440.00, d: 0.14 }, { f: 523.25, d: 0.14 }, { f: 587.33, d: 0.24 }, { f: 698.46, d: 0.24 }, { f: 783.99, d: 0.80 },
+  { f: 0, d: 0.15 },
+
+  // Câu 7: Ngày em bước ra đi nước mắt ấy biệt li
+  { f: 392.00, d: 0.24 }, { f: 440.00, d: 0.24 }, { f: 523.25, d: 0.24 }, { f: 440.00, d: 0.24 }, { f: 440.00, d: 0.45 },
+  { f: 392.00, d: 0.22 }, { f: 440.00, d: 0.22 }, { f: 523.25, d: 0.40 }, { f: 587.33, d: 0.24 }, { f: 698.46, d: 0.80 },
+  { f: 0, d: 0.15 },
+
+  // Câu 8: Hoa vẫn rơi bên thềm nhà
+  { f: 392.00, d: 0.24 }, { f: 440.00, d: 0.24 }, { f: 392.00, d: 0.24 }, { f: 349.23, d: 0.24 }, { f: 293.66, d: 0.45 }, { f: 293.66, d: 0.70 },
+  { f: 0, d: 0.15 },
+
+  // Câu 9: Lá xát xơ đi nhiều và
+  { f: 392.00, d: 0.24 }, { f: 440.00, d: 0.24 }, { f: 392.00, d: 0.24 }, { f: 349.23, d: 0.24 }, { f: 329.63, d: 0.45 }, { f: 329.63, d: 0.70 },
+  { f: 0, d: 0.15 },
+
+  // Câu 10: Anh chúc em yên bình mối tình mình hẹn em kiếp sau
+  { f: 392.00, d: 0.22 }, { f: 440.00, d: 0.22 }, { f: 392.00, d: 0.22 }, { f: 349.23, d: 0.22 }, { f: 329.63, d: 0.35 }, { f: 329.63, d: 0.22 },
+  { f: 220.00, d: 0.38 }, { f: 261.63, d: 0.22 }, { f: 293.66, d: 0.22 }, { f: 349.23, d: 0.22 }, { f: 293.66, d: 0.24 }, { f: 293.66, d: 1.10 },
+  { f: 0, d: 0.60 }
+];
+
+let isMelodyPlaying = false;
+let melodyLoopTimer = null;
+
+function playEmergencySiren() {
+  // Âm thanh cảnh báo chỉ phát trên còi ESP32 phần cứng theo yêu cầu người dùng
+  return;
+}
+
+function stopSound() {
+  // No-op trên giao diện web
+}
+
+// ======================== AUTO-DISCOVERY IP QUA SUPABASE ========================
+async function autoDiscoverIP() {
+  if (state.cfg.connMode === 'local' && getEspHost() === '192.168.4.1') return; // Không gọi ra ngoài khi ở mạng SoftAP nội bộ
+  if (state.discovering) return;
+  state.discovering = true;
+  try {
+    const url = `${state.cfg.supabaseUrl}/rest/v1/air_telemetry?select=ip&order=created_at.desc&limit=1`;
+    const res = await fetch(url, {
+      headers: {
+        'apikey': state.cfg.supabaseKey,
+        'Authorization': `Bearer ${state.cfg.supabaseKey}`
+      },
+      cache: 'no-store'
+    });
+    if (!res.ok) return;
+    const rows = await res.json();
+    if (rows && rows.length > 0 && rows[0].ip && /^\d+\.\d+\.\d+\.\d+$/.test(rows[0].ip.trim())) {
+      const newIP = rows[0].ip.trim();
+      if (state.cfg.espIP !== newIP) {
+        console.log(`[Auto-Discovery] Phat hien IP moi cua ESP32 tu Supabase: ${newIP}`);
+        state.cfg.espIP = newIP;
+        const input = document.getElementById('cfgEspIP');
+        if (input) input.value = newIP;
+        const lbl = document.getElementById('lblEspIP');
+        if (lbl) lbl.textContent = newIP;
+        localStorage.setItem('aq_monitor_cfg_v5', JSON.stringify(state.cfg));
+        showAlert('Tự động nhận diện IP:', `Router đã cấp IP mới cho ESP32: ${newIP}`, 'info', false);
+      }
+    }
+  } catch (_) {}
+  finally {
+    state.discovering = false;
+  }
+}
+
+function getEspHost() {
+  if (window.location.protocol.startsWith('http') && window.location.hostname && window.location.hostname !== 'localhost') {
+    return window.location.hostname;
+  }
+  return state.cfg.espIP || '192.168.4.1';
+}
+
+function getApiUrl(path) {
+  if (window.location.protocol.startsWith('http')) {
+    return path;
+  }
+  return `http://${getEspHost()}${path}`;
+}
+
+// ======================== WEBSOCKET REAL-TIME ========================
+let ws = null;
+let wsConnected = false;
+let wsReconnectTimer = null;
+
+function connectWebSocket() {
+  if (state.cfg.connMode !== 'local') return;
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+
+  const host = getEspHost();
+  const wsUrl = `ws://${host}:81/`;
+
+  try {
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      wsConnected = true;
+      const dot = document.getElementById('connDot');
+      const lbl = document.getElementById('connLabel');
+      if (dot) dot.className = 'conn-dot online pulse';
+      if (lbl) lbl.innerHTML = `<i class="fa-solid fa-circle-check" style="color:var(--green)"></i> Đã kết nối`;
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const d = JSON.parse(event.data);
+        handleTelemetry(d);
+      } catch (e) {}
+    };
+
+    ws.onclose = () => {
+      wsConnected = false;
+      if (state.cfg.connMode === 'local') {
+        const dot = document.getElementById('connDot');
+        const lbl = document.getElementById('connLabel');
+        if (dot) dot.className = 'conn-dot wait';
+        if (lbl) lbl.textContent = `Polling HTTP (${host})`;
+        fetchData();
+        clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = setTimeout(connectWebSocket, 2000);
+      }
+    };
+
+    ws.onerror = () => {
+      wsConnected = false;
+    };
+  } catch (e) {
+    wsConnected = false;
+  }
+}
+
+function sendWsCommand(cmd, val) {
+  if (ws && wsConnected && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ cmd: cmd, val: val }));
+    return true;
+  }
+  return false;
+}
+
+function handleTelemetry(d) {
+  updateTempUI(d.temp);
+  updateHumiUI(d.humi);
+  updateGasUI(d.gas, d.peak);
+  updateAqiUI(d.aqi);
+  if (d.mode !== state.mode) setMode(d.mode);
+  if (d.thresh_dang && state.cfg.gasThreshold !== d.thresh_dang) {
+    const sl = document.getElementById('threshSlider');
+    if (sl && document.activeElement !== sl) {
+      state.cfg.gasThreshold = d.thresh_dang;
+      sl.value = d.thresh_dang;
+      document.getElementById('threshDisplay').textContent = d.thresh_dang;
+      const tMod = document.getElementById('threshModDisplay');
+      if (tMod) tMod.textContent = Math.round(d.thresh_dang / 2);
+    }
+  }
+
+  // Cập nhật trạng thái Tạm tắt còi (Snooze 30s)
+  if (d.snooze) {
+    const badge = document.getElementById('modeBadge');
+    if (badge) {
+      badge.textContent = `SNOOZE (${d.snooze_rem}s)`;
+      badge.className = 'tag tag-orange';
+    }
+    const modeTxt = document.getElementById('modeStateText');
+    if (modeTxt) modeTxt.textContent = `Tạm tắt còi (${d.snooze_rem}s)`;
+    const cmdSt = document.getElementById('cmdStatus');
+    if (cmdSt) {
+      cmdSt.innerHTML = `<i class="fa-solid fa-clock" style="color:var(--amber)"></i> <span>Đang tạm tắt còi: còn ${d.snooze_rem}s</span>`;
+    }
+  }
+
+  // Nếu đang ở chế độ SoftAP (khi mất WiFi)
+  if (d.is_ap) {
+    const lbl = document.getElementById('connLabel');
+    if (lbl) lbl.textContent = 'WiFi AP: 192.168.4.1';
+  }
+
+  // Cập nhật số lượng bản ghi SQLite Offline Cache
+  if (d.sql_cache !== undefined) {
+    const el = document.getElementById('lblSqlCacheCount');
+    if (el) el.textContent = d.sql_cache;
+    const elModal = document.getElementById('lblSqlCacheModal');
+    if (elModal) elModal.textContent = `${d.sql_cache} bản ghi`;
+  }
+
+  updateTimestamps();
+
+  const nowMs = Date.now();
+  if (state.chart && (!state.lastChartPush || nowMs - state.lastChartPush >= 1000)) {
+    state.lastChartPush = nowMs;
+    pushChartData(new Date(), d.temp, d.humi, d.gas, state.cfg.gasThreshold);
+  }
+}
+
+// ======================== DUAL-MODE FETCH DATA ========================
+async function fetchData() {
+  const dot = document.getElementById('connDot');
+  const lbl = document.getElementById('connLabel');
+
+  if (state.cfg.connMode === 'local') {
+    // Nếu WebSocket đang chạy mượt, không cần gửi thêm HTTP request
+    if (wsConnected) return;
+
+    // Fallback: Kết nối HTTP REST tới ESP32 nếu WebSocket chưa bắt kịp
+    const url = getApiUrl(`/api/data?_t=${Date.now()}`);
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 2500);
+      const res = await fetch(url, { cache: 'no-store', signal: ctrl.signal });
+      clearTimeout(tid);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const d = await res.json();
+
+      dot.className = 'conn-dot online';
+      lbl.textContent = `Direct Local (${getEspHost()})`;
+      handleTelemetry(d);
+    } catch (err) {
+      dot.className = 'conn-dot offline';
+      lbl.textContent = `Mất kết nối ESP32`;
+      if (state.cfg.connMode !== 'local' || getEspHost() !== '192.168.4.1') autoDiscoverIP();
+    }
+  } else {
+    // 2. KẾT NỐI QUA CLOUD SUPABASE REST API
+    const url = `${state.cfg.supabaseUrl}/rest/v1/air_telemetry?order=created_at.desc&limit=30`;
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'apikey': state.cfg.supabaseKey,
+          'Authorization': `Bearer ${state.cfg.supabaseKey}`
+        },
+        cache: 'no-store'
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      dot.className = 'conn-dot online';
+      lbl.textContent = 'Cloud Supabase';
+
+      if (Array.isArray(data) && data.length > 0) {
+        processSupabaseFeeds(data);
+      }
+    } catch (err) {
+      dot.className = 'conn-dot offline';
+      lbl.textContent = 'Mất kết nối Supabase Cloud';
+    }
+  }
+}
+
+function processSupabaseFeeds(rows) {
+  if (!rows || rows.length === 0) return;
+  const last = rows[0]; // Bản ghi mới nhất
+  const temp = (last.temp !== null && last.temp !== undefined) ? Number(last.temp) : state.temp;
+  const humi = (last.humidity !== null && last.humidity !== undefined) ? Number(last.humidity) : state.humi;
+  const gas  = (last.gas !== null && last.gas !== undefined) ? Number(last.gas) : state.gas;
+  const aqi  = (last.aqi !== null && last.aqi !== undefined) ? Number(last.aqi) : (gas >= state.cfg.gasThreshold ? 2 : (gas >= state.cfg.gasThreshold / 2 ? 1 : 0));
+  const mode = (last.mode !== null && last.mode !== undefined) ? Number(last.mode) : state.mode;
+
+  updateTempUI(temp);
+  updateHumiUI(humi);
+  updateGasUI(gas, last.peak);
+  updateAqiUI(aqi);
+  if (mode !== state.mode) setMode(mode);
+  updateTimestamps(last.created_at);
+
+  if (last.ip && /^\d+\.\d+\.\d+\.\d+$/.test(last.ip.trim())) {
+    if (state.cfg.espIP !== last.ip.trim()) {
+      state.cfg.espIP = last.ip.trim();
+      const input = document.getElementById('cfgEspIP');
+      if (input) input.value = state.cfg.espIP;
+      const lbl = document.getElementById('lblEspIP');
+      if (lbl) lbl.textContent = state.cfg.espIP;
+      localStorage.setItem('aq_monitor_cfg_v5', JSON.stringify(state.cfg));
+    }
+  }
+
+  if (state.chart) {
+    const sorted = [...rows].reverse();
+    const labels = [], dTemp = [], dHumi = [], dGas = [], dThresh = [];
+    sorted.forEach(r => {
+      const d = new Date(r.created_at);
+      labels.push(`${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}:${d.getSeconds().toString().padStart(2,'0')}`);
+      dTemp.push(r.temp);
+      dHumi.push(r.humidity);
+      dGas.push(r.gas);
+      dThresh.push(r.danger_thresh || state.cfg.gasThreshold);
+    });
+    state.chart.data.labels = labels;
+    state.chart.data.datasets[0].data = dTemp;
+    state.chart.data.datasets[1].data = dHumi;
+    state.chart.data.datasets[2].data = dGas;
+    state.chart.data.datasets[3].data = dThresh;
+    state.chart.update('none');
+  }
+}
+
+function pushChartData(dateObj, temp, humi, gas, thresh) {
+  const label = `${dateObj.getHours().toString().padStart(2,'0')}:${dateObj.getMinutes().toString().padStart(2,'0')}:${dateObj.getSeconds().toString().padStart(2,'0')}`;
+  const c = state.chart;
+  if (c.data.labels.length > 20) {
+    c.data.labels.shift();
+    c.data.datasets.forEach(ds => ds.data.shift());
+  }
+  c.data.labels.push(label);
+  c.data.datasets[0].data.push(temp);
+  c.data.datasets[1].data.push(humi);
+  c.data.datasets[2].data.push(gas);
+  c.data.datasets[3].data.push(thresh);
+  c.update('none');
+}
+
+// ======================== SEND COMMAND ========================
+async function sendCommand(modeVal, desc) {
+  const fb = document.getElementById('cmdStatus');
+  if (state.sending) return;
+  state.sending = true;
+
+  fb.className = 'cmd-status wait';
+  fb.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> <span>Đang gửi "${desc}"...</span>`;
+
+  if (state.cfg.connMode === 'local') {
+    // 1. Thử gửi tức thì qua WebSocket
+    if (sendWsCommand('mode', modeVal)) {
+      fb.className = 'cmd-status ok';
+      fb.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span>Đã thực hiện</span>`;
+      setMode(modeVal);
+      addLog(desc, state.temp.toFixed(1), state.humi.toFixed(1), state.gas, state.aqiLevel);
+      state.sending = false;
+      return;
+    }
+
+    // 2. Fallback REST API nếu chưa có WebSocket
+    try {
+      const url = getApiUrl(`/api/cmd?mode=${modeVal}`);
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 2500);
+      const res = await fetch(url, { signal: ctrl.signal });
+      clearTimeout(tid);
+      if (res.ok) {
+        fb.className = 'cmd-status ok';
+        fb.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span>Đã thực hiện</span>`;
+        setMode(modeVal);
+        addLog(desc, state.temp.toFixed(1), state.humi.toFixed(1), state.gas, state.aqiLevel);
+      } else {
+        throw new Error('Local error');
+      }
+    } catch (_) {
+      fb.className = 'cmd-status err';
+      fb.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> <span>Lỗi gửi lệnh tới ESP32</span>`;
+    } finally {
+      state.sending = false;
+    }
+  } else {
+    // Gửi qua Supabase Cloud REST API
+    try {
+      const url = `${state.cfg.supabaseUrl}/rest/v1/air_controls?id=eq.1`;
+      const body = {
+        mode: modeVal,
+        snooze: (modeVal === 2),
+        updated_at: new Date().toISOString()
+      };
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'apikey': state.cfg.supabaseKey,
+          'Authorization': `Bearer ${state.cfg.supabaseKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify(body)
+      });
+      if (res.ok) {
+        fb.className = 'cmd-status ok';
+        fb.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><polyline points="20 6 9 17 4 12"></polyline></svg> <span>"${desc}" thành công (Cloud)</span>`;
+        setMode(modeVal);
+        addLog(desc + ' (Supabase Cloud)', state.temp.toFixed(1), state.humi.toFixed(1), state.gas, state.aqiLevel);
+      } else {
+        throw new Error(`HTTP ${res.status}`);
+      }
+    } catch (e) {
+      fb.className = 'cmd-status err';
+      fb.innerHTML = `<span>Lỗi kết nối Supabase Cloud!</span>`;
+    } finally {
+      state.sending = false;
+    }
+  }
+}
+
+// ======================== GAUGE & UI UPDATE ========================
+const CIRC = 314;
+function setGauge(id, val, max) {
+  const el = document.getElementById(id);
+  const ratio = Math.min(1, Math.max(0, val / max));
+  el.style.strokeDashoffset = CIRC - CIRC * ratio;
+}
+
+function updateTempUI(v) {
+  state.temp = v;
+  document.getElementById('tempValue').textContent = v.toFixed(1);
+  setGauge('gaugeTemp', v, 50);
+  document.getElementById('tempStatus').textContent = v > 35 ? '⚠ Quá nóng!' : (v < 18 ? 'Hơi lạnh' : 'Nhiệt độ ổn định');
+}
+
+function updateHumiUI(v) {
+  state.humi = v;
+  document.getElementById('humiValue').textContent = v.toFixed(1);
+  setGauge('gaugeHumi', v, 100);
+  document.getElementById('humiStatus').textContent = v > 85 ? '⚠ Độ ẩm cao!' : (v < 40 ? 'Không khí khô' : 'Độ ẩm tiêu chuẩn');
+}
+
+function updateGasUI(v, peak) {
+  state.gas = v;
+  document.getElementById('gasValue').textContent = v;
+  const pVal = (peak !== undefined && peak !== null && peak > 0) ? peak : v;
+  const pEl = document.getElementById('peakValue');
+  if (pEl) pEl.textContent = pVal;
+  const iEl = document.getElementById('gasInstantTxt');
+  if (iEl) iEl.textContent = v;
+  setGauge('gaugeGas', v, 4095);
+
+  const danger = state.cfg.gasThreshold || 500;
+  const mod = Math.round(danger / 2);
+  const card = document.getElementById('cardGas');
+  const el = document.getElementById('gaugeGas');
+
+  if (v >= danger) {
+    el.style.stroke = 'var(--red)';
+    card.classList.add('pulse-danger');
+    document.getElementById('gasStatus').textContent = `🚨 NGUY HIỂM (Vượt ${danger})!`;
+  } else if (v >= mod) {
+    el.style.stroke = 'var(--amber)';
+    card.classList.remove('pulse-danger');
+    document.getElementById('gasStatus').textContent = '⚠ Ô nhiễm nhẹ / chớm khói';
+  } else {
+    el.style.stroke = 'var(--green)';
+    card.classList.remove('pulse-danger');
+    document.getElementById('gasStatus').textContent = 'Không khí sạch (An toàn)';
+  }
+}
+
+function updateAqiUI(level) {
+  const changed = state.aqiLevel !== level;
+  state.aqiLevel = level;
+
+  const display = document.getElementById('aqiDisplay');
+  const icon = document.getElementById('aqiIcon');
+  const label = document.getElementById('aqiLabel');
+  const sub = document.getElementById('aqiSub');
+  const card = document.getElementById('cardAqi');
+
+  display.classList.remove('aqi-good', 'aqi-moderate', 'aqi-danger');
+
+  if (level === 0) {
+    display.classList.add('aqi-good');
+    icon.className = 'fa-solid fa-shield-heart aqi-icon';
+    label.textContent = 'KHÔNG KHÍ TỐT';
+    sub.textContent = 'Chất lượng không khí trong phòng đạt mức an toàn';
+    state.buzzerOn = (state.mode === 1);
+    card.classList.remove('pulse-danger');
+  } else if (level === 1) {
+    display.classList.add('aqi-moderate');
+    icon.className = 'fa-solid fa-triangle-exclamation aqi-icon';
+    label.textContent = 'CHÚ Ý / Ô NHIỄM NHẸ';
+    sub.textContent = 'Nồng độ khói/gas tăng nhẹ, đang theo dõi';
+    state.buzzerOn = (state.mode === 1);
+    card.classList.remove('pulse-danger');
+  } else {
+    display.classList.add('aqi-danger');
+    icon.className = 'fa-solid fa-skull-crossbones aqi-icon';
+    label.textContent = '🚨 BÁO ĐỘNG ĐỎ - NGUY HIỂM!';
+    sub.textContent = `Khói vượt ngưỡng an toàn (${state.gas} / ${state.cfg.gasThreshold} ADC)! Còi đang kích hoạt.`;
+    state.buzzerOn = (state.mode !== 2);
+    card.classList.add('pulse-danger');
+  }
+
+  document.getElementById('buzzerStateText').textContent = state.buzzerOn ? 'ĐANG HÚ CÒI' : 'Tắt';
+  document.getElementById('buzzerStateText').style.color = state.buzzerOn ? 'var(--red)' : 'var(--green)';
+  document.getElementById('modeStateText').textContent =
+    state.mode === 0 ? 'Tự động (Auto)' : (state.mode === 1 ? 'Bật còi cưỡng bức' : 'Tắt còi cưỡng bức');
+
+  if (level === 2) {
+    showAlert('🚨 BÁO ĐỘNG KHẨN CẤP:', `Khói gas vượt ngưỡng (${state.gas}/${state.cfg.gasThreshold} ADC)! Còi đang kêu.`, 'danger', true);
+    playEmergencySiren();
+    if (changed) addLog('Khói gas vượt ngưỡng nguy hiểm', state.temp.toFixed(1), state.humi.toFixed(1), state.gas, 2);
+  } else if (level === 1) {
+    if (changed) {
+      showAlert('⚠ Lưu ý theo dõi:', `Khói tăng nhẹ (${state.gas} ADC).`, 'warning', false);
+      beep(750, 0.25, 'triangle');
+      addLog('Khói gas chớm tăng', state.temp.toFixed(1), state.humi.toFixed(1), state.gas, 1);
+    }
+  } else if (changed && state.prevAqi > 0) {
+    showAlert('✅ AN TOÀN TRỞ LẠI:', `Không khí đã sạch (${state.gas} ADC).`, 'success', false);
+    beep(523, 0.2, 'sine');
+    addLog('Chất lượng không khí an toàn trở lại', state.temp.toFixed(1), state.humi.toFixed(1), state.gas, 0);
+  }
+  state.prevAqi = level;
+}
+
+function setMode(m) {
+  state.mode = m;
+  const autoBtn = document.getElementById('btnAuto');
+  const manBtn = document.getElementById('btnManual');
+  const badge = document.getElementById('modeBadge');
+
+  if (m === 0) {
+    autoBtn.classList.add('active'); manBtn.classList.remove('active');
+    badge.textContent = 'AUTO'; badge.className = 'tag tag-mode';
+  } else {
+    autoBtn.classList.remove('active'); manBtn.classList.add('active');
+    badge.textContent = 'MANUAL'; badge.className = 'tag tag-orange';
+  }
+  document.getElementById('modeStateText').textContent =
+    m === 0 ? 'Tự động' : (m === 1 ? 'Bật còi' : 'Tắt còi');
+}
+
+function setConnectionMode(mode) {
+  state.cfg.connMode = mode;
+  document.getElementById('btnModeLocal').className = 'mode-toggle-btn' + (mode === 'local' ? ' active' : '');
+  document.getElementById('btnModeCloud').className = 'mode-toggle-btn' + (mode === 'cloud' ? ' active' : '');
+  restartSync();
+}
+
+function updateTimestamps(dateStr) {
+  const d = dateStr ? new Date(dateStr) : new Date();
+  const t = d.toLocaleTimeString('vi-VN');
+  document.getElementById('tempTime').textContent = t;
+  document.getElementById('humiTime').textContent = t;
+  document.getElementById('gasTime').textContent = t;
+}
+
+function showAlert(heading, msg, type = 'warning', persistent = false) {
+  const strip = document.getElementById('alertStrip');
+  const h = document.getElementById('alertHeading');
+  const m = document.getElementById('alertMsg');
+  const muteBtn = document.getElementById('alertQuickMuteBtn');
+
+  strip.className = 'alert-strip alert-' + type;
+  h.textContent = heading;
+  m.textContent = msg;
+
+  if (type === 'danger') {
+    muteBtn.style.display = 'inline-flex';
+  } else {
+    muteBtn.style.display = 'none';
+  }
+
+  strip.classList.remove('hidden');
+  clearTimeout(strip._t);
+  if (!persistent) {
+    strip._t = setTimeout(() => strip.classList.add('hidden'), 6000);
+  }
+}
+
+function addLog(event, temp, humi, gas, quality) {
+  const tbody = document.getElementById('logBody');
+  const tr = document.createElement('tr');
+  const now = new Date().toLocaleTimeString('vi-VN');
+
+  const qBadge = quality === 0 ? '<span class="tag tag-cyan" style="font-size:.72rem">Tốt</span>'
+    : quality === 1 ? '<span class="tag tag-orange" style="font-size:.72rem">TB</span>'
+    : quality === 2 ? '<span class="tag" style="font-size:.72rem;background:rgba(248,113,113,.2);color:#f87171;border:1px solid var(--red)">Nguy hiểm</span>'
+    : quality;
+
+  tr.innerHTML = `
+    <td class="mono" style="color:var(--text-2)">${now}</td>
+    <td><strong>${event}</strong></td>
+    <td class="mono">${temp} °C</td>
+    <td class="mono">${humi} %</td>
+    <td class="mono">${gas}</td>
+    <td>${qBadge}</td>`;
+  tbody.insertBefore(tr, tbody.firstChild);
+  while (tbody.children.length > 50) tbody.removeChild(tbody.lastChild);
+}
+
+// ======================== CHART.JS ========================
+function initChart() {
+  if (typeof Chart === 'undefined') {
+    console.warn('Chart.js không khả dụng khi offline (SoftAP). Bỏ qua khởi tạo đồ thị.');
+    return;
+  }
+  const canvas = document.getElementById('mainChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const gradTemp = ctx.createLinearGradient(0, 0, 0, 280);
+  gradTemp.addColorStop(0, 'rgba(34,211,238,.3)');
+  gradTemp.addColorStop(1, 'rgba(34,211,238,0)');
+
+  const gradHumi = ctx.createLinearGradient(0, 0, 0, 280);
+  gradHumi.addColorStop(0, 'rgba(96,165,250,.25)');
+  gradHumi.addColorStop(1, 'rgba(96,165,250,0)');
+
+  state.chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: 'Nhiệt độ (°C)',
+          data: [], borderColor: '#22d3ee', backgroundColor: gradTemp,
+          borderWidth: 2.5, fill: true, tension: .35, yAxisID: 'yLeft', pointRadius: 2
+        },
+        {
+          label: 'Độ ẩm (%)',
+          data: [], borderColor: '#60a5fa', backgroundColor: gradHumi,
+          borderWidth: 2, fill: true, tension: .35, yAxisID: 'yLeft', pointRadius: 2
+        },
+        {
+          label: 'Khói/Gas (ADC)',
+          data: [], borderColor: '#fbbf24', backgroundColor: 'transparent',
+          borderWidth: 2.5, fill: false, tension: .35, yAxisID: 'yRight', pointRadius: 2
+        },
+        {
+          label: 'Ngưỡng Nguy hiểm',
+          data: [], borderColor: '#f97316', borderWidth: 1.5,
+          borderDash: [6, 4], fill: false, pointRadius: 0, yAxisID: 'yRight'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#0f172a', titleColor: '#f1f5f9', bodyColor: '#cbd5e1',
+          borderColor: 'rgba(255,255,255,.1)', borderWidth: 1, padding: 10
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,.04)' },
+          ticks: { color: '#64748b', font: { family: 'JetBrains Mono', size: 10 } }
+        },
+        yLeft: {
+          type: 'linear', position: 'left', min: 0, max: 100,
+          grid: { color: 'rgba(255,255,255,.04)' },
+          ticks: { color: '#22d3ee', font: { family: 'JetBrains Mono', size: 10 } },
+          title: { display: true, text: '°C / %', color: '#22d3ee' }
+        },
+        yRight: {
+          type: 'linear', position: 'right', min: 0, max: 4095,
+          grid: { drawOnChartArea: false },
+          ticks: { color: '#fbbf24', font: { family: 'JetBrains Mono', size: 10 } },
+          title: { display: true, text: 'Gas ADC', color: '#fbbf24' }
+        }
+      }
+    }
+  });
+}
+
+function restartSync() {
+  if (state.timer) clearInterval(state.timer);
+  if (state.cfg.connMode === 'local') {
+    connectWebSocket();
+  } else {
+    if (ws) { ws.close(); ws = null; wsConnected = false; }
+  }
+  fetchData();
+  const intervalSec = state.cfg.connMode === 'local' ? 2 : (state.cfg.syncInterval || 5);
+  state.timer = setInterval(fetchData, intervalSec * 1000);
+}
+
+// ======================== CONFIG & EVENTS ========================
+function loadConfig() {
+  const s = localStorage.getItem('aq_monitor_cfg_v5');
+  if (s) {
+    try { Object.assign(state.cfg, JSON.parse(s)); } catch (_) {}
+  }
+  if (window.location.protocol.startsWith('http') && window.location.hostname && window.location.hostname !== 'localhost') {
+    state.cfg.espIP = window.location.hostname;
+  }
+  document.getElementById('cfgConnMode').value = state.cfg.connMode;
+  document.getElementById('cfgEspIP').value = state.cfg.espIP;
+  const lbl = document.getElementById('lblEspIP');
+  if (lbl) lbl.textContent = state.cfg.espIP;
+  const sbUrl = document.getElementById('cfgSupabaseUrl');
+  if (sbUrl) sbUrl.value = state.cfg.supabaseUrl || DEFAULTS.supabaseUrl;
+  const sbKey = document.getElementById('cfgSupabaseKey');
+  if (sbKey) sbKey.value = state.cfg.supabaseKey || DEFAULTS.supabaseKey;
+  document.getElementById('cfgInterval').value = state.cfg.syncInterval || DEFAULTS.syncInterval;
+  document.getElementById('threshSlider').value = state.cfg.gasThreshold;
+  document.getElementById('threshDisplay').textContent = state.cfg.gasThreshold;
+  const tMod = document.getElementById('threshModDisplay');
+  if (tMod) tMod.textContent = Math.round(state.cfg.gasThreshold / 2);
+  setConnectionMode(state.cfg.connMode);
+}
+
+function saveConfig() {
+  state.cfg.connMode = document.getElementById('cfgConnMode').value;
+  state.cfg.espIP = document.getElementById('cfgEspIP').value.trim() || '192.168.4.1';
+  const lbl = document.getElementById('lblEspIP');
+  if (lbl) lbl.textContent = state.cfg.espIP;
+  const sbUrl = document.getElementById('cfgSupabaseUrl');
+  if (sbUrl) state.cfg.supabaseUrl = sbUrl.value.trim() || DEFAULTS.supabaseUrl;
+  const sbKey = document.getElementById('cfgSupabaseKey');
+  if (sbKey) state.cfg.supabaseKey = sbKey.value.trim() || DEFAULTS.supabaseKey;
+  state.cfg.syncInterval = Math.max(1, parseInt(document.getElementById('cfgInterval').value) || 3);
+  localStorage.setItem('aq_monitor_cfg_v5', JSON.stringify(state.cfg));
+  setConnectionMode(state.cfg.connMode);
+}
+
+function switchModalTab(tabName) {
+  const tabWifiBtn = document.getElementById('tabWifiBtn');
+  const tabCfgBtn = document.getElementById('tabCfgBtn');
+  const tabWifiContent = document.getElementById('tabWifiContent');
+  const tabCfgContent = document.getElementById('tabCfgContent');
+  const saveModalBtn = document.getElementById('saveModalBtn');
+
+  if (tabName === 'wifi') {
+    tabWifiBtn.classList.add('active');
+    tabCfgBtn.classList.remove('active');
+    tabWifiContent.style.display = 'flex';
+    tabCfgContent.style.display = 'none';
+    if (saveModalBtn) saveModalBtn.style.display = 'none';
+  } else {
+    tabWifiBtn.classList.remove('active');
+    tabCfgBtn.classList.add('active');
+    tabWifiContent.style.display = 'none';
+    tabCfgContent.style.display = 'flex';
+    if (saveModalBtn) saveModalBtn.style.display = 'inline-flex';
+  }
+}
+
+async function scanWifi() {
+  const btn = document.getElementById('btnScanWifi');
+  const sel = document.getElementById('wifiSsidSelect');
+  const msg = document.getElementById('wifiStatusMsg');
+  if (btn) btn.disabled = true;
+  if (msg) {
+    msg.style.color = 'var(--cyan)';
+    msg.textContent = 'Đang quét sóng WiFi xung quanh...';
+  }
+  try {
+    const url = getApiUrl('/api/wifi/scan');
+    const res = await fetch(url, { cache: 'no-cache' });
+    if (!res.ok) throw new Error('Không thể kết nối API quét WiFi');
+    const list = await res.json();
+    sel.innerHTML = '<option value="">-- Chọn WiFi từ danh sách --</option>';
+    list.sort((a, b) => b.rssi - a.rssi);
+    list.forEach(net => {
+      if (!net.ssid) return;
+      const opt = document.createElement('option');
+      opt.value = net.ssid;
+      const lock = net.secure ? ' [Bảo mật]' : ' [Mở]';
+      const sig = net.rssi >= -60 ? 'Sóng mạnh' : (net.rssi >= -75 ? 'Sóng khá' : 'Sóng yếu');
+      opt.textContent = `${net.ssid} (${net.rssi} dBm - ${sig})${lock}`;
+      sel.appendChild(opt);
+    });
+    const optManual = document.createElement('option');
+    optManual.value = '__manual__';
+    optManual.textContent = '-- Tự nhập mạng ẩn / khác --';
+    sel.appendChild(optManual);
+
+    if (msg) {
+      msg.style.color = 'var(--green)';
+      msg.textContent = `Đã tìm thấy ${list.length} mạng WiFi. Hãy chọn mạng của bạn.`;
+    }
+  } catch (err) {
+    if (msg) {
+      msg.style.color = 'var(--red)';
+      msg.textContent = 'Lỗi quét WiFi: ' + err.message;
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function saveWifi() {
+  const sel = document.getElementById('wifiSsidSelect');
+  const man = document.getElementById('wifiSsidManual');
+  const pass = document.getElementById('wifiPass');
+  const msg = document.getElementById('wifiStatusMsg');
+  const btn = document.getElementById('btnSaveWifi');
+
+  const ssid = (sel.value && sel.value !== '__manual__' ? sel.value : man.value || '').trim();
+  const password = pass.value;
+
+  if (!ssid) {
+    if (msg) {
+      msg.style.color = 'var(--red)';
+      msg.textContent = 'Vui lòng chọn hoặc nhập tên WiFi (SSID)!';
+    }
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+  if (msg) {
+    msg.style.color = 'var(--cyan)';
+    msg.textContent = `Đang gửi cấu hình mạng "${ssid}" tới ESP32...`;
+  }
+
+  try {
+    const url = getApiUrl(`/api/wifi/save?ssid=${encodeURIComponent(ssid)}&pass=${encodeURIComponent(password)}`);
+    const res = await fetch(url, { method: 'GET', cache: 'no-cache' });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      if (msg) {
+        msg.style.color = 'var(--green)';
+        msg.innerHTML = `Đã lưu mạng <strong>"${ssid}"</strong>!<br>ESP32 đang tắt điểm phát AP và khởi động lại để kết nối mạng mới.<br>Vui lòng theo dõi <strong>Địa chỉ IP mới</strong> hiển thị trên màn hình OLED!`;
+      }
+      showAlert('Cập nhật WiFi:', `Đã lưu mạng "${ssid}". ESP32 đang kết nối... Xem IP mới trên OLED!`, 'success', false);
+    } else {
+      throw new Error(data.msg || 'Không thể lưu WiFi');
+    }
+  } catch (err) {
+    if (msg) {
+      msg.style.color = 'var(--red)';
+      msg.textContent = 'Lỗi lưu WiFi: ' + err.message;
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function resetWifiConfig() {
+  if (!confirm('Bạn có chắc muốn xóa dữ liệu WiFi trên ESP32? Thiết bị sẽ chuyển về SoftAP "AirMonitor_Duy" (Mật khẩu: admin1234 | 192.168.4.1) để cấu hình lại.')) return;
+  const msg = document.getElementById('wifiStatusMsg');
+  if (msg) {
+    msg.style.color = 'var(--amber)';
+    msg.textContent = 'Đang xóa cấu hình WiFi...';
+  }
+  try {
+    await fetch(getApiUrl('/api/wifi/reset'), { method: 'GET', cache: 'no-cache' });
+    if (msg) {
+      msg.style.color = 'var(--green)';
+      msg.textContent = 'Đã xóa WiFi! Hãy kết nối vào "AirMonitor_Duy" (Pass: admin1234 | IP: 192.168.4.1).';
+    }
+    showAlert('Đã xóa data WiFi:', 'ESP32 đang phát Access Point "AirMonitor_Duy" (Mật khẩu: admin1234 | IP: 192.168.4.1)', 'warning', true);
+  } catch (_) {
+    showAlert('Đã gửi lệnh xóa:', 'Vui lòng kết nối vào mạng "AirMonitor_Duy" (Mật khẩu: admin1234 | IP: 192.168.4.1) để cài đặt WiFi mới.', 'info', true);
+  }
+}
+
+function setupEvents() {
+  document.getElementById('alertQuickMuteBtn').addEventListener('click', () => {
+    stopSound();
+    sendCommand(2, 'TẠM TẮT CÒI (30S)');
+    setMode(2);
+  });
+
+  document.getElementById('btnAuto').addEventListener('click', () => {
+    sendCommand(0, 'Chuyển Tự động (AUTO)');
+  });
+
+  document.getElementById('btnManual').addEventListener('click', () => {
+    setMode(1);
+    showAlert('Chế độ Thủ công:', 'Bạn toàn quyền bật hoặc tắt còi cảnh báo.', 'warning', false);
+  });
+
+  document.getElementById('btnBuzzerOn').addEventListener('click', () => {
+    sendCommand(1, 'BẬT CÒI CƯỠNG BỨC');
+  });
+
+  document.getElementById('btnBuzzerOff').addEventListener('click', () => {
+    stopSound();
+    sendCommand(2, 'TẠM TẮT CÒI (30S)');
+    setMode(2);
+  });
+
+  const slider = document.getElementById('threshSlider');
+  slider.addEventListener('input', e => {
+    const v = parseInt(e.target.value);
+    document.getElementById('threshDisplay').textContent = v;
+    const tMod = document.getElementById('threshModDisplay');
+    if (tMod) tMod.textContent = Math.round(v / 2);
+    state.cfg.gasThreshold = v;
+    if (state.chart) {
+      state.chart.data.datasets[3].data = state.chart.data.labels.map(() => v);
+      state.chart.update('none');
+    }
+    updateGasUI(state.gas);
+  });
+  slider.addEventListener('change', () => {
+    localStorage.setItem('aq_monitor_cfg_v5', JSON.stringify(state.cfg));
+    if (state.cfg.connMode === 'local') {
+      // 1. Thử gửi tức thì qua WebSocket
+      if (sendWsCommand('thresh', state.cfg.gasThreshold)) {
+        setMode(0);
+        showAlert('Cập nhật Ngưỡng:', `Đã áp dụng ngưỡng ${state.cfg.gasThreshold} ADC thành công.`, 'info', false);
+      } else {
+        // 2. Fallback REST API
+        fetch(getApiUrl(`/api/threshold?danger=${state.cfg.gasThreshold}`))
+          .then(() => {
+            setMode(0);
+            showAlert('Cập nhật Ngưỡng:', `Đã áp dụng ngưỡng ${state.cfg.gasThreshold} ADC thành công lên ESP32!`, 'info', false);
+          })
+          .catch(() => {
+            showAlert('Lỗi kết nối:', `Không thể gửi ngưỡng tới ESP32`, 'warning', false);
+          });
+      }
+    } else {
+      // Cloud Supabase Mode
+      fetch(`${state.cfg.supabaseUrl}/rest/v1/air_controls?id=eq.1`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': state.cfg.supabaseKey,
+          'Authorization': `Bearer ${state.cfg.supabaseKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({ danger_thresh: state.cfg.gasThreshold, updated_at: new Date().toISOString() })
+      })
+      .then(res => {
+        if (res.ok) {
+          showAlert('Cập nhật Ngưỡng (Cloud):', `Đã đồng bộ ngưỡng ${state.cfg.gasThreshold} ADC lên Supabase!`, 'info', false);
+        }
+      })
+      .catch(() => {});
+    }
+    addLog(`Đổi ngưỡng nguy hiểm: ${state.cfg.gasThreshold} ADC`, '--', '--', '--', '--');
+  });
+
+  document.getElementById('toggleSound').addEventListener('change', e => {
+    state.soundOn = e.target.checked;
+    if (e.target.checked) beep(880, 0.12);
+  });
+
+  document.getElementById('btnRefresh').addEventListener('click', () => {
+    fetchData();
+    beep(1200, 0.08);
+  });
+
+  document.getElementById('btnClearLog').addEventListener('click', () => {
+    document.getElementById('logBody').innerHTML = '';
+  });
+
+  document.getElementById('dismissAlertBtn').addEventListener('click', () => {
+    document.getElementById('alertStrip').classList.add('hidden');
+  });
+
+  const overlay = document.getElementById('settingsOverlay');
+  document.getElementById('openWifiBtn').addEventListener('click', () => {
+    switchModalTab('wifi');
+    overlay.classList.remove('hidden');
+    scanWifi();
+  });
+  document.getElementById('openSettingsBtn').addEventListener('click', () => {
+    switchModalTab('cfg');
+    overlay.classList.remove('hidden');
+  });
+  document.getElementById('closeModalBtn').addEventListener('click', () => overlay.classList.add('hidden'));
+  document.getElementById('cancelModalBtn').addEventListener('click', () => overlay.classList.add('hidden'));
+  document.getElementById('saveModalBtn').addEventListener('click', () => {
+    saveConfig();
+    overlay.classList.add('hidden');
+    showAlert('Thành công!', 'Đã lưu cấu hình và kết nối lại.');
+  });
+
+  document.getElementById('btnScanWifi').addEventListener('click', scanWifi);
+  document.getElementById('btnSaveWifi').addEventListener('click', saveWifi);
+  const btnReset = document.getElementById('btnResetWifi');
+  if (btnReset) btnReset.addEventListener('click', resetWifiConfig);
+
+  const selWifi = document.getElementById('wifiSsidSelect');
+  const manField = document.getElementById('fieldManualSsid');
+  const manInput = document.getElementById('wifiSsidManual');
+  if (selWifi) {
+    selWifi.addEventListener('change', () => {
+      if (selWifi.value && selWifi.value !== '__manual__') {
+        manInput.value = selWifi.value;
+        if (manField) manField.style.display = 'none'; // Ẩn ô nhập tay khi đã chọn từ danh sách quét
+      } else {
+        manInput.value = '';
+        if (manField) manField.style.display = 'flex'; // Hiện lại ô nhập tay nếu chọn tự nhập
+        if (selWifi.value === '__manual__') manInput.focus();
+      }
+    });
+  }
+
+  document.getElementById('btnTogglePass').addEventListener('click', () => {
+    const p = document.getElementById('wifiPass');
+    if (p.type === 'password') {
+      p.type = 'text';
+    } else {
+      p.type = 'password';
+    }
+  });
+}
+
+async function clearLocalSqlCache() {
+  if (!confirm('Bạn có chắc muốn xóa sạch toàn bộ bộ nhớ đệm SQLite offline trên ESP32?')) return;
+  try {
+    const res = await fetch(getApiUrl('/api/sql-clear'), { method: 'POST' });
+    const j = await res.json();
+    alert('Đã xóa sạch bộ nhớ SQLite offline!');
+    const el = document.getElementById('lblSqlCacheCount');
+    if (el) el.textContent = '0';
+    const elModal = document.getElementById('lblSqlCacheModal');
+    if (elModal) elModal.textContent = '0 bản ghi';
+  } catch (e) {
+    alert('Lỗi gửi lệnh xóa: ' + e);
+  }
+}
+
+async function downloadOfflineSqlFile() {
+  try {
+    const res = await fetch(getApiUrl('/api/sql-cache'));
+    const data = await res.json();
+    if (!data.records || data.records.length === 0) {
+      alert('Hiện không có bản ghi nào trong SQLite Local Cache để xuất!');
+      return;
+    }
+    let sql = `-- Air Quality Monitor SQLite Offline Export\n-- Tao luc: ${new Date().toISOString()}\n\n`;
+    sql += `CREATE TABLE IF NOT EXISTS air_telemetry (\n  id SERIAL PRIMARY KEY,\n  temp REAL,\n  humidity REAL,\n  gas INTEGER,\n  peak INTEGER,\n  aqi INTEGER,\n  mode INTEGER,\n  danger_thresh INTEGER,\n  buzzer BOOLEAN,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\n\n`;
+    data.records.forEach((r, idx) => {
+      sql += `INSERT INTO air_telemetry (temp, humidity, gas, peak, aqi, mode, danger_thresh, buzzer) VALUES (${r.temp || 0}, ${r.humidity || 0}, ${r.gas || 0}, ${r.peak || 0}, ${r.aqi || 0}, ${r.mode || 0}, ${r.danger_thresh || 500}, ${r.buzzer ? 'TRUE' : 'FALSE'});\n`;
+    });
+    const blob = new Blob([sql], { type: 'text/sql;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `air_telemetry_offline_${Date.now()}.sql`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('Lỗi xuất dữ liệu SQLite: ' + e);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadConfig();
+  try { initChart(); } catch (e) { console.warn('Chart init skipped:', e); }
+  setupEvents();
+  if (state.cfg.connMode === 'local') connectWebSocket();
+  document.addEventListener('touchstart', () => { getAudioContext(); }, { once: true, passive: true });
+  document.addEventListener('click', () => { getAudioContext(); }, { once: true, passive: true });
+  addLog('Hệ thống giám sát khởi động thành công', '--', '--', '--', '--');
+});
+  </script>
+</body>
+</html>
